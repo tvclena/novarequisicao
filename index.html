@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<title>Mercatto Requisição</title>
+</head>
+<body>
+
+<h2>Buscar Produto</h2>
+<input id="busca" placeholder="Digite produto..." />
+<ul id="lista"></ul>
+
+<button onclick="enviar()">Enviar Transferência</button>
+<pre id="log"></pre>
+
+<script>
+let token = "";
+
+async function renovarToken() {
+  const r = await fetch("/api/login");
+  const d = await r.json();
+  token = "Bearer " + d.accessToken;
+}
+
+setInterval(renovarToken, 1000 * 60 * 10);
+renovarToken();
+
+document.getElementById("busca").addEventListener("input", async e => {
+  if (!token) return;
+
+  const q = e.target.value;
+  const r = await fetch(`/api/buscar-produto?q=${q}`, {
+    headers: { Authorization: token }
+  });
+  const d = await r.json();
+
+  const ul = document.getElementById("lista");
+  ul.innerHTML = "";
+  d.items?.forEach(p => {
+    const li = document.createElement("li");
+    li.textContent = `${p.id} - ${p.descricao}`;
+    ul.appendChild(li);
+  });
+});
+
+async function enviar() {
+  const body = {
+    dataRegistro: "2026-01-12",
+    dataTransferencia: "2026-01-12",
+    tipo: "TRANSFERENCIA",
+    modelo: "DIRETA",
+    lojaId: 1,
+    localOrigemId: 1,
+    localDestinoId: 11,
+    solicitanteId: 130,
+    motivoRequisicaoId: 1,
+    observacaoGeral: "Transferência via Vercel",
+    itens: [
+      {
+        produtoId: 18,
+        quantidadeTransferida: 1,
+        custoMedio: 0,
+        custo: 0,
+        custoReposicao: 0,
+        custoFiscal: 0
+      }
+    ]
+  };
+
+  const r = await fetch("/api/requisicao", {
+    method: "POST",
+    headers: {
+      Authorization: token,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(body)
+  });
+
+  document.getElementById("log").textContent =
+    r.status + "\n" + await r.text();
+}
+</script>
+
+</body>
+</html>
