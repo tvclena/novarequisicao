@@ -2,17 +2,72 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<title>Requisição de Mercadoria (Debug Total)</title>
+<title>📦 Requisição de Mercadoria (Debug Total)</title>
 
 <style>
-body { font-family: Inter, Arial; background:#f4f6f8; padding:40px }
-input, select { padding:12px; width:100%; border-radius:10px; border:1px solid #ddd }
-button { padding:14px; background:#ff6a00; color:#fff; border:none; border-radius:10px; cursor:pointer }
-.grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:14px }
-pre { background:#0b1220; color:#e5e7eb; padding:16px; border-radius:12px; overflow:auto }
-.card { background:#fff; padding:30px; border-radius:18px; margin-top:20px }
-.error { background:#fee2e2; color:#991b1b; padding:14px; border-radius:10px }
-.success { background:#dcfce7; color:#166534; padding:14px; border-radius:10px }
+* { box-sizing: border-box; font-family: Inter, Arial }
+body { background:#f4f6f8; padding:30px }
+h1 { margin-bottom:20px }
+
+.grid {
+  display:grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap:12px;
+}
+
+input, select, textarea {
+  padding:10px;
+  border-radius:8px;
+  border:1px solid #ccc;
+  width:100%;
+}
+
+textarea { resize:vertical }
+
+button {
+  background:#ff6a00;
+  color:#fff;
+  border:none;
+  padding:14px 24px;
+  border-radius:10px;
+  font-weight:600;
+  cursor:pointer;
+  margin-top:20px;
+}
+
+button:hover { opacity:.9 }
+
+.card {
+  background:#fff;
+  padding:20px;
+  border-radius:14px;
+  margin-top:20px;
+}
+
+pre {
+  background:#020617;
+  color:#e5e7eb;
+  padding:16px;
+  border-radius:12px;
+  overflow:auto;
+  font-size:13px;
+}
+
+.error {
+  background:#fee2e2;
+  color:#991b1b;
+  padding:14px;
+  border-radius:10px;
+  margin-top:15px;
+}
+
+.success {
+  background:#dcfce7;
+  color:#166534;
+  padding:14px;
+  border-radius:10px;
+  margin-top:15px;
+}
 </style>
 </head>
 
@@ -21,95 +76,137 @@ pre { background:#0b1220; color:#e5e7eb; padding:16px; border-radius:12px; overf
 <h1>📦 Requisição de Mercadoria — Debug Total</h1>
 
 <div class="card">
+  <h3>Dados da Requisição</h3>
+
   <div class="grid">
-    <input id="produtoId" placeholder="Produto ID">
-    <input id="quantidade" placeholder="Quantidade">
-    <input id="dataTransferencia" placeholder="Data Transferência (YYYY-MM-DD)">
-    <input id="dataRecebimento" placeholder="Data Recebimento (YYYY-MM-DD)">
-    <input id="lojaId" value="1" placeholder="Loja ID">
-    <input id="localOrigemId" placeholder="Local Origem ID">
-    <input id="localDestinoId" placeholder="Local Destino ID">
-    <input id="setorId" placeholder="Setor ID">
-    <input id="solicitanteId" placeholder="Solicitante ID">
-    <input id="motivoRequisicaoId" placeholder="Motivo Requisição ID">
-    <input id="observacao" placeholder="Observação">
+    <input id="dataTransferencia" type="date">
+    <input id="dataRecebimento" type="date">
+
+    <select id="tipo">
+      <option value="TRANSFERENCIA">TRANSFERENCIA</option>
+    </select>
+
+    <select id="status">
+      <option value="ABERTA">ABERTA</option>
+      <option value="RECEBIDA">RECEBIDA</option>
+    </select>
+
+    <select id="modelo">
+      <option value="DIRETA">DIRETA</option>
+    </select>
+
+    <input id="lojaId" type="number" value="1" placeholder="Loja ID">
+    <input id="localOrigemId" type="number" value="1" placeholder="Local Origem ID">
+    <input id="localDestinoId" type="number" value="1" placeholder="Local Destino ID">
+    <input id="setorId" type="number" value="1" placeholder="Setor ID">
+    <input id="solicitanteId" type="number" placeholder="Solicitante ID">
+    <input id="motivoRequisicaoId" type="number" value="1" placeholder="Motivo ID">
   </div>
 
-  <br>
-  <button onclick="enviar()">Enviar Requisição</button>
+  <textarea id="observacaoGeral" placeholder="Observação geral"></textarea>
 </div>
+
+<div class="card">
+  <h3>Item da Requisição</h3>
+
+  <div class="grid">
+    <input id="produtoId" type="number" placeholder="Produto ID">
+    <input id="quantidade" type="number" step="0.001" value="1">
+  </div>
+
+  <textarea id="observacaoItem" placeholder="Observação do item"></textarea>
+</div>
+
+<button onclick="enviar()">🚀 Enviar Requisição</button>
 
 <div id="msg"></div>
 
-<h2>🧪 Debug</h2>
+<h3>🧪 Debug em Tempo Real</h3>
 <pre id="debug"></pre>
 
 <script>
-async function enviar() {
-  const debug = document.getElementById("debug");
-  const msg = document.getElementById("msg");
+const debug = document.getElementById("debug");
+const msg = document.getElementById("msg");
 
+function log(text) {
+  debug.textContent += text + "\n";
+}
+
+async function enviar() {
   debug.textContent = "";
   msg.innerHTML = "";
 
   try {
-    debug.textContent += "🔐 OBTENDO TOKEN...\n";
+    log("🔐 OBTENDO TOKEN...");
 
     const authResp = await fetch("/api/auth");
     const authText = await authResp.text();
+    log("AUTH RAW:");
+    log(authText + "\n");
 
-    debug.textContent += "AUTH RAW:\n" + authText + "\n\n";
+    const auth = JSON.parse(authText);
+    const token = auth.accessToken;
 
-    const token = JSON.parse(authText).accessToken;
     if (!token) throw new Error("Token não retornado");
 
-    debug.textContent += "TOKEN OK:\n" + token + "\n\n";
+    log("TOKEN OK:");
+    log(token + "\n");
 
     const body = {
       dataTransferencia: document.getElementById("dataTransferencia").value,
       dataRecebimento: document.getElementById("dataRecebimento").value,
-      tipo: "CONSUMO",
-      status: "RECEBIDA",
-      modelo: "DIRETA",
+      tipo: document.getElementById("tipo").value,
+      status: document.getElementById("status").value,
+      modelo: document.getElementById("modelo").value,
       lojaId: Number(document.getElementById("lojaId").value),
       localOrigemId: Number(document.getElementById("localOrigemId").value),
       localDestinoId: Number(document.getElementById("localDestinoId").value),
       setorId: Number(document.getElementById("setorId").value),
       solicitanteId: Number(document.getElementById("solicitanteId").value),
       motivoRequisicaoId: Number(document.getElementById("motivoRequisicaoId").value),
-      observacaoGeral: document.getElementById("observacao").value,
-      total: 1,
-      itens: [{
-        produtoId: Number(document.getElementById("produtoId").value),
-        quantidadeTransferida: Number(document.getElementById("quantidade").value),
-        observacao: "Enviado via API",
-        custoMedio: 0,
-        custo: 0,
-        custoReposicao: 0,
-        custoFiscal: 0
-      }]
+      observacaoGeral: document.getElementById("observacaoGeral").value,
+      total: 0,
+      itens: [
+        {
+          produtoId: Number(document.getElementById("produtoId").value),
+          quantidadeTransferida: Number(document.getElementById("quantidade").value),
+          observacao: document.getElementById("observacaoItem").value,
+          custoMedio: 0,
+          custo: 0,
+          custoReposicao: 0,
+          custoFiscal: 0
+        }
+      ]
     };
 
-    debug.textContent += "BODY ENVIADO:\n" + JSON.stringify(body, null, 2) + "\n\n";
+    log("BODY ENVIADO:");
+    log(JSON.stringify(body, null, 2) + "\n");
 
     const resp = await fetch("/api/requisicao", {
       method: "POST",
-      headers: { Authorization: token },
+      headers: {
+        "Authorization": token,
+        "Content-Type": "application/json"
+      },
       body: JSON.stringify(body)
     });
 
     const text = await resp.text();
 
-    debug.textContent += "STATUS: " + resp.status + "\n";
-    debug.textContent += "RAW:\n" + text;
+    log("STATUS: " + resp.status);
+    log("RAW:");
+    log(text);
 
-    if (!resp.ok) throw new Error("Erro ao enviar requisição");
+    if (!resp.ok) {
+      throw new Error("Erro ao enviar requisição");
+    }
 
     msg.innerHTML = `<div class="success">✅ Requisição enviada com sucesso</div>`;
 
-  } catch (err) {
-    msg.innerHTML = `<div class="error">❌ ${err.message}</div>`;
-    debug.textContent += "\nERRO:\n" + err.message;
+  } catch (e) {
+    msg.innerHTML = `<div class="error">❌ ${e.message}</div>`;
+    log("\nERRO:");
+    log(e.message);
   }
 }
 </script>
