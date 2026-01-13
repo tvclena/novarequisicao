@@ -1,24 +1,218 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Consulta de Produto</title>
-<link rel="stylesheet" href="style.css" />
+<meta charset="UTF-8">
+<title>Consulta de Produto - Mercatto</title>
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+
+<style>
+*{
+  box-sizing:border-box;
+  font-family:'Inter', sans-serif;
+}
+
+body{
+  margin:0;
+  background:#f4f6f8;
+  color:#111;
+}
+
+.header{
+  padding:24px;
+  font-size:26px;
+  font-weight:800;
+}
+
+.search-box{
+  padding:0 24px;
+  display:flex;
+  gap:12px;
+}
+
+.search-box input{
+  flex:1;
+  padding:14px;
+  font-size:16px;
+  border-radius:12px;
+  border:1px solid #ccc;
+}
+
+.search-box button{
+  padding:14px 22px;
+  border:none;
+  border-radius:12px;
+  background:#ff6a00;
+  color:#fff;
+  font-weight:700;
+  cursor:pointer;
+}
+
+.container{
+  padding:24px;
+}
+
+.card{
+  background:#fff;
+  border-radius:18px;
+  padding:22px;
+  box-shadow:0 10px 30px rgba(0,0,0,.08);
+  margin-top:20px;
+}
+
+.card h2{
+  margin:0 0 10px;
+  font-size:22px;
+}
+
+.grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(240px,1fr));
+  gap:12px;
+  margin-top:14px;
+}
+
+.item{
+  background:#f8f9fa;
+  padding:10px 12px;
+  border-radius:10px;
+  font-size:14px;
+}
+
+.item b{
+  display:block;
+  font-size:12px;
+  color:#666;
+}
+
+.loading{
+  padding:20px;
+  text-align:center;
+  font-weight:600;
+}
+
+.error{
+  background:#ffe3e3;
+  padding:14px;
+  border-radius:12px;
+  color:#b00020;
+  margin-top:20px;
+}
+</style>
 </head>
+
 <body>
-<div class="container">
-<h1>🔎 Consulta de Produto</h1>
 
+<div class="header">📦 Consulta de Produto</div>
 
-<input id="produtoId" type="number" placeholder="Digite o ID do produto" />
-<button onclick="buscarProduto()">Buscar</button>
-
-
-<div id="resultado"></div>
+<div class="search-box">
+  <input id="produtoId" placeholder="Digite o ID do produto (ex: 1178)">
+  <button onclick="buscarProduto()">Buscar</button>
 </div>
 
+<div class="container" id="resultado"></div>
 
-<script src="app.js"></script>
+<script>
+let accessToken = null;
+let tokenExpire = 0;
+
+// 🔐 LOGIN AUTOMÁTICO
+async function login(){
+  const res = await fetch('/api/auth');
+  const data = await res.json();
+
+  accessToken = data.accessToken;
+  tokenExpire = Date.now() + (29 * 60 * 1000); // 29 minutos
+}
+
+// ♻️ GARANTE TOKEN VÁLIDO
+async function getToken(){
+  if(!accessToken || Date.now() > tokenExpire){
+    await login();
+  }
+  return accessToken;
+}
+
+// 🔎 BUSCAR PRODUTO
+async function buscarProduto(){
+  const id = document.getElementById('produtoId').value.trim();
+  const box = document.getElementById('resultado');
+
+  if(!id){
+    box.innerHTML = '<div class="error">Informe o ID do produto</div>';
+    return;
+  }
+
+  box.innerHTML = '<div class="loading">Buscando produto...</div>';
+
+  try{
+    const token = await getToken();
+
+    const res = await fetch(`/api/produto?id=${id}`,{
+      headers:{
+        Authorization:`Bearer ${token}`
+      }
+    });
+
+    const json = await res.json();
+
+    if(!json.items || !json.items.length){
+      box.innerHTML = '<div class="error">Produto não encontrado</div>';
+      return;
+    }
+
+    renderProduto(json.items[0]);
+
+  }catch(e){
+    box.innerHTML = '<div class="error">Erro ao buscar produto</div>';
+  }
+}
+
+// 🧾 RENDERIZA CARD
+function renderProduto(p){
+  document.getElementById('resultado').innerHTML = `
+    <div class="card">
+      <h2>${p.descricao}</h2>
+      <div class="grid">
+        ${campo("ID", p.id)}
+        ${campo("Descrição Reduzida", p.descricaoReduzida)}
+        ${campo("Grupo ID", p.grupoId)}
+        ${campo("Seção ID", p.secaoId)}
+        ${campo("NCM", p.ncmId)}
+        ${campo("Unidade Venda", p.unidadeDeVenda)}
+        ${campo("Controla Estoque", p.controlaEstoque)}
+        ${campo("Preço Variável", p.precoVariavel)}
+        ${campo("Ativo Ecommerce", p.ativoNoEcommerce)}
+        ${campo("Produção", p.producao)}
+        ${campo("Peso Variável", p.pesoVariavel)}
+        ${campo("Bonificação", p.tipoBonificacao)}
+        ${campo("Finalidade", p.finalidadeProduto)}
+        ${campo("Data Inclusão", formatarData(p.dataInclusao))}
+        ${campo("Última Alteração", formatarData(p.dataAlteracao))}
+      </div>
+    </div>
+  `;
+}
+
+function campo(nome, valor){
+  return `
+    <div class="item">
+      <b>${nome}</b>
+      ${valor ?? "-"}
+    </div>
+  `;
+}
+
+function formatarData(d){
+  if(!d) return "-";
+  return new Date(d).toLocaleString('pt-BR');
+}
+
+// auto login ao abrir
+login();
+</script>
+
 </body>
 </html>
