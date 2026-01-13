@@ -2,6 +2,7 @@ export default async function handler(req, res) {
   const { id } = req.query;
   const authHeader = req.headers.authorization;
 
+  // 🔒 validações básicas
   if (!id) {
     return res.status(400).json({ error: "ID obrigatório" });
   }
@@ -11,30 +12,36 @@ export default async function handler(req, res) {
   }
 
   try {
+    // ✅ URL OFICIAL DO VAREJO FÁCIL
     const url = `https://mercatto.varejofacil.com/api/v1/produto/produtos?q=id==${id}&start=0&count=1`;
 
-    console.log("URL PRODUTO:", url);
+    // 🔎 DEBUG TOTAL
+    console.log("🔍 BUSCANDO PRODUTO");
+    console.log("➡️ URL PRODUTO:", url);
+    console.log("🔐 AUTH HEADER:", authHeader);
 
     const response = await fetch(url, {
+      method: "GET",
       headers: {
-        "Authorization": authHeader,
+        "Authorization": authHeader, // Bearer eyJhbGciOi...
         "Accept": "application/json"
       }
     });
 
-    const text = await response.text();
+    const raw = await response.text();
 
-    console.log("PRODUTO STATUS:", response.status);
-    console.log("PRODUTO RAW:", text);
+    console.log("📡 STATUS PRODUTO:", response.status);
+    console.log("📦 RESPOSTA PRODUTO (RAW):", raw);
 
     if (!response.ok) {
       return res.status(response.status).json({
         error: "Erro ao buscar produto",
-        raw: text
+        raw
       });
     }
 
-    const json = JSON.parse(text);
+    const json = JSON.parse(raw);
+
     return res.status(200).json(json);
 
   } catch (err) {
