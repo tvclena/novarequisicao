@@ -1,32 +1,26 @@
-import { getToken } from './auth.js';
-
-export default async function handler(req, res){
-  try{
+export default async function handler(req, res) {
+  try {
     const { id } = req.query;
-
-    if(!id){
-      return res.status(400).json({ message:'ID não informado' });
+    if (!id) {
+      return res.status(400).json({ message: 'ID não informado' });
     }
 
-    const token = await getToken();
+    const auth = await fetch(`${req.headers.origin}/api/auth`);
+    const authData = await auth.json();
 
-    const api = `${process.env.VAREJO_BASE_URL}/v1/produto/produtos?q=id==${id}`;
-
-    const r = await fetch(api, {
-      headers:{
-        Authorization: `Bearer ${token}`
+    const r = await fetch(
+      `https://mercatto.varejofacil.com/api/v1/produto/produtos?q=id==${id}`,
+      {
+        headers: {
+          Authorization: `Bearer ${authData.accessToken}`
+        }
       }
-    });
+    );
 
     const data = await r.json();
-
-    if(!r.ok){
-      return res.status(500).json(data);
-    }
-
     res.status(200).json(data);
 
-  }catch(err){
+  } catch (err) {
     res.status(500).json({ message: err.message });
   }
 }
