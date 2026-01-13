@@ -2,216 +2,183 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<title>Consulta de Produto - Mercatto</title>
-
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+<title>Consulta de Produto - Debug Total</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
 
 <style>
-*{
-  box-sizing:border-box;
-  font-family:'Inter', sans-serif;
+body {
+  font-family: Inter, Arial, sans-serif;
+  background: #f5f6f8;
+  margin: 0;
+  padding: 30px;
 }
-
-body{
-  margin:0;
-  background:#f4f6f8;
-  color:#111;
+h1 {
+  margin-bottom: 20px;
 }
-
-.header{
-  padding:24px;
-  font-size:26px;
-  font-weight:800;
+input {
+  width: 100%;
+  padding: 14px;
+  font-size: 16px;
+  margin-bottom: 10px;
 }
-
-.search-box{
-  padding:0 24px;
-  display:flex;
-  gap:12px;
+button {
+  padding: 14px 24px;
+  font-size: 16px;
+  background: #ff6a00;
+  border: none;
+  color: #fff;
+  border-radius: 8px;
+  cursor: pointer;
 }
-
-.search-box input{
-  flex:1;
-  padding:14px;
-  font-size:16px;
-  border-radius:12px;
-  border:1px solid #ccc;
+button:hover {
+  opacity: 0.9;
 }
-
-.search-box button{
-  padding:14px 22px;
-  border:none;
-  border-radius:12px;
-  background:#ff6a00;
-  color:#fff;
-  font-weight:700;
-  cursor:pointer;
+.card {
+  background: #fff;
+  border-radius: 14px;
+  padding: 20px;
+  margin-top: 20px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.08);
 }
-
-.container{
-  padding:24px;
+.debug {
+  background: #0f172a;
+  color: #e5e7eb;
+  padding: 16px;
+  border-radius: 10px;
+  margin-top: 20px;
+  font-family: monospace;
+  font-size: 13px;
+  white-space: pre-wrap;
 }
-
-.card{
-  background:#fff;
-  border-radius:18px;
-  padding:22px;
-  box-shadow:0 10px 30px rgba(0,0,0,.08);
-  margin-top:20px;
+.error {
+  background: #fee2e2;
+  color: #7f1d1d;
+  padding: 12px;
+  border-radius: 8px;
+  margin-top: 15px;
 }
-
-.card h2{
-  margin:0 0 10px;
-  font-size:22px;
-}
-
-.grid{
-  display:grid;
-  grid-template-columns:repeat(auto-fit,minmax(240px,1fr));
-  gap:12px;
-  margin-top:14px;
-}
-
-.item{
-  background:#f8f9fa;
-  padding:10px 12px;
-  border-radius:10px;
-  font-size:14px;
-}
-
-.item b{
-  display:block;
-  font-size:12px;
-  color:#666;
-}
-
-.loading{
-  padding:20px;
-  text-align:center;
-  font-weight:600;
-}
-
-.error{
-  background:#ffe3e3;
-  padding:14px;
-  border-radius:12px;
-  color:#b00020;
-  margin-top:20px;
+.ok {
+  background: #dcfce7;
+  color: #14532d;
+  padding: 12px;
+  border-radius: 8px;
+  margin-top: 15px;
 }
 </style>
 </head>
 
 <body>
 
-<div class="header">📦 Consulta de Produto</div>
+<h1>📦 Consulta de Produto (Debug Total)</h1>
 
-<div class="search-box">
-  <input id="produtoId" placeholder="Digite o ID do produto (ex: 1178)">
-  <button onclick="buscarProduto()">Buscar</button>
-</div>
+<input id="produtoId" placeholder="Digite o ID do produto (ex: 1178)">
+<button onclick="buscarProduto()">Buscar</button>
 
-<div class="container" id="resultado"></div>
+<div id="status"></div>
+<div id="produto"></div>
+<div id="debug" class="debug"></div>
 
 <script>
-let accessToken = null;
-let tokenExpire = 0;
-
-// 🔐 LOGIN AUTOMÁTICO
-async function login(){
-  const res = await fetch('/api/auth');
-  const data = await res.json();
-
-  accessToken = data.accessToken;
-  tokenExpire = Date.now() + (29 * 60 * 1000); // 29 minutos
+function log(msg) {
+  const dbg = document.getElementById('debug');
+  dbg.textContent += msg + "\n";
+  dbg.scrollTop = dbg.scrollHeight;
 }
 
-// ♻️ GARANTE TOKEN VÁLIDO
-async function getToken(){
-  if(!accessToken || Date.now() > tokenExpire){
-    await login();
-  }
-  return accessToken;
-}
+async function buscarProduto() {
+  document.getElementById('produto').innerHTML = '';
+  document.getElementById('status').innerHTML = '';
+  document.getElementById('debug').textContent = '';
 
-// 🔎 BUSCAR PRODUTO
-async function buscarProduto(){
   const id = document.getElementById('produtoId').value.trim();
-  const box = document.getElementById('resultado');
+  if (!id) return;
 
-  if(!id){
-    box.innerHTML = '<div class="error">Informe o ID do produto</div>';
-    return;
-  }
+  try {
+    // ===============================
+    // 1️⃣ GERAR TOKEN
+    // ===============================
+    log("🔐 CHAMANDO /api/auth");
 
-  box.innerHTML = '<div class="loading">Buscando produto...</div>';
+    const authUrl = `${location.origin}/api/auth`;
+    log("URL AUTH: " + authUrl);
 
-  try{
-    const token = await getToken();
+    const authRes = await fetch(authUrl);
+    log("STATUS AUTH: " + authRes.status);
 
-    const res = await fetch(`/api/produto?id=${id}`,{
-      headers:{
-        Authorization:`Bearer ${token}`
-      }
-    });
+    const authText = await authRes.text();
+    log("RESPOSTA AUTH (RAW):\n" + authText);
 
-    const json = await res.json();
+    let authJson;
+    try {
+      authJson = JSON.parse(authText);
+    } catch {
+      throw new Error("Resposta do /api/auth NÃO é JSON");
+    }
 
-    if(!json.items || !json.items.length){
-      box.innerHTML = '<div class="error">Produto não encontrado</div>';
+    if (!authJson.accessToken) {
+      throw new Error("Token não retornado");
+    }
+
+    const token = authJson.accessToken;
+    log("✅ TOKEN GERADO:\n" + token);
+
+    document.getElementById('status').innerHTML =
+      `<div class="ok">Token gerado com sucesso</div>`;
+
+    // ===============================
+    // 2️⃣ BUSCAR PRODUTO
+    // ===============================
+    const produtoUrl =
+      `${location.origin}/api/produto?id=${id}`;
+
+    log("\n📦 CHAMANDO PRODUTO");
+    log("URL PRODUTO: " + produtoUrl);
+
+    const prodRes = await fetch(produtoUrl);
+    log("STATUS PRODUTO: " + prodRes.status);
+
+    const prodText = await prodRes.text();
+    log("RESPOSTA PRODUTO (RAW):\n" + prodText);
+
+    let prodJson;
+    try {
+      prodJson = JSON.parse(prodText);
+    } catch {
+      throw new Error("Resposta do /api/produto NÃO é JSON");
+    }
+
+    if (!prodJson.items || !prodJson.items.length) {
+      document.getElementById('status').innerHTML =
+        `<div class="error">Produto não encontrado</div>`;
       return;
     }
 
-    renderProduto(json.items[0]);
+    const p = prodJson.items[0];
 
-  }catch(e){
-    box.innerHTML = '<div class="error">Erro ao buscar produto</div>';
+    // ===============================
+    // 3️⃣ RENDERIZA CARD
+    // ===============================
+    document.getElementById('produto').innerHTML = `
+      <div class="card">
+        <h2>${p.descricao}</h2>
+        <p><b>ID:</b> ${p.id}</p>
+        <p><b>Descrição reduzida:</b> ${p.descricaoReduzida}</p>
+        <p><b>Unidade:</b> ${p.unidadeDeVenda}</p>
+        <p><b>Grupo:</b> ${p.grupoId}</p>
+        <p><b>Seção:</b> ${p.secaoId}</p>
+        <p><b>Controla estoque:</b> ${p.controlaEstoque}</p>
+        <p><b>Ativo no ecommerce:</b> ${p.ativoNoEcommerce}</p>
+        <p><b>Data inclusão:</b> ${p.dataInclusao}</p>
+      </div>
+    `;
+
+  } catch (err) {
+    document.getElementById('status').innerHTML =
+      `<div class="error">ERRO: ${err.message}</div>`;
+    log("\n❌ ERRO FINAL:");
+    log(err.stack || err.message);
   }
 }
-
-// 🧾 RENDERIZA CARD
-function renderProduto(p){
-  document.getElementById('resultado').innerHTML = `
-    <div class="card">
-      <h2>${p.descricao}</h2>
-      <div class="grid">
-        ${campo("ID", p.id)}
-        ${campo("Descrição Reduzida", p.descricaoReduzida)}
-        ${campo("Grupo ID", p.grupoId)}
-        ${campo("Seção ID", p.secaoId)}
-        ${campo("NCM", p.ncmId)}
-        ${campo("Unidade Venda", p.unidadeDeVenda)}
-        ${campo("Controla Estoque", p.controlaEstoque)}
-        ${campo("Preço Variável", p.precoVariavel)}
-        ${campo("Ativo Ecommerce", p.ativoNoEcommerce)}
-        ${campo("Produção", p.producao)}
-        ${campo("Peso Variável", p.pesoVariavel)}
-        ${campo("Bonificação", p.tipoBonificacao)}
-        ${campo("Finalidade", p.finalidadeProduto)}
-        ${campo("Data Inclusão", formatarData(p.dataInclusao))}
-        ${campo("Última Alteração", formatarData(p.dataAlteracao))}
-      </div>
-    </div>
-  `;
-}
-
-function campo(nome, valor){
-  return `
-    <div class="item">
-      <b>${nome}</b>
-      ${valor ?? "-"}
-    </div>
-  `;
-}
-
-function formatarData(d){
-  if(!d) return "-";
-  return new Date(d).toLocaleString('pt-BR');
-}
-
-// auto login ao abrir
-login();
 </script>
 
 </body>
