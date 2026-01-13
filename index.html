@@ -50,11 +50,11 @@ async function buscarProduto() {
 
     const urlProduto = `/api/produto?id=${id}`;
     debug.textContent += "📦 CHAMANDO PRODUTO:\n" + urlProduto + "\n";
-    debug.textContent += "AUTH HEADER:\nBearer " + token + "\n\n";
+    debug.textContent += "AUTH HEADER:\n" + token + "\n\n";
 
     const prodResp = await fetch(urlProduto, {
       headers: {
-        Authorization: `Bearer ${token}`
+        Authorization: `${token}`
       }
     });
 
