@@ -1,9 +1,10 @@
 export default async function handler(req, res) {
   try {
+    // XML EXATAMENTE IGUAL AO POSTMAN
     const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <Usuario>
-  <username>${process.env.VAREJO_USER}</username>
-  <password>${process.env.VAREJO_PASS}</password>
+  <username>NALBERT SOUZA</username>
+  <password>99861</password>
 </Usuario>`;
 
     const response = await fetch(
@@ -18,25 +19,25 @@ export default async function handler(req, res) {
       }
     );
 
-    const text = await response.text();
+    const raw = await response.text();
 
     // DEBUG TOTAL
     console.log("AUTH STATUS:", response.status);
-    console.log("AUTH RAW:", text);
+    console.log("AUTH RAW:", raw);
 
     if (!response.ok) {
       return res.status(response.status).json({
         error: "Erro ao autenticar",
-        raw: text
+        raw
       });
     }
 
-    const json = JSON.parse(text);
+    const json = JSON.parse(raw);
 
     return res.status(200).json({
       accessToken: json.accessToken,
       refreshToken: json.refreshToken,
-      expiresIn: 1800 // 30 minutos
+      expiresIn: 1800
     });
 
   } catch (err) {
