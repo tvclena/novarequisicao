@@ -1,26 +1,46 @@
 export default async function handler(req, res) {
+  const { id } = req.query;
+  const authHeader = req.headers.authorization;
+
+  if (!id) {
+    return res.status(400).json({ error: "ID obrigatório" });
+  }
+
+  if (!authHeader) {
+    return res.status(401).json({ error: "Token não enviado" });
+  }
+
   try {
-    const { id } = req.query;
-    if (!id) {
-      return res.status(400).json({ message: 'ID não informado' });
+    const url = `https://mercatto.varejofacil.com/api/v1/produto/produtos?q=id==${id}&start=0&count=1`;
+
+    console.log("URL PRODUTO:", url);
+
+    const response = await fetch(url, {
+      headers: {
+        "Authorization": authHeader,
+        "Accept": "application/json"
+      }
+    });
+
+    const text = await response.text();
+
+    console.log("PRODUTO STATUS:", response.status);
+    console.log("PRODUTO RAW:", text);
+
+    if (!response.ok) {
+      return res.status(response.status).json({
+        error: "Erro ao buscar produto",
+        raw: text
+      });
     }
 
-    const auth = await fetch(`${req.headers.origin}/api/auth`);
-    const authData = await auth.json();
-
-    const r = await fetch(
-      `https://mercatto.varejofacil.com/api/v1/produto/produtos?q=id==${id}`,
-      {
-        headers: {
-          Authorization: `${authData.accessToken}`
-        }
-      }
-    );
-
-    const data = await r.json();
-    res.status(200).json(data);
+    const json = JSON.parse(text);
+    return res.status(200).json(json);
 
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    return res.status(500).json({
+      error: "Erro interno produto",
+      message: err.message
+    });
   }
 }
