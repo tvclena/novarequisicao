@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Requisição de Mercadoria (Debug Total)</title>
+
+<style>
+body { font-family: Inter, Arial; background:#f4f6f8; padding:40px }
+input, select { padding:12px; width:100%; border-radius:10px; border:1px solid #ddd }
+button { padding:14px; background:#ff6a00; color:#fff; border:none; border-radius:10px; cursor:pointer }
+.grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:14px }
+pre { background:#0b1220; color:#e5e7eb; padding:16px; border-radius:12px; overflow:auto }
+.card { background:#fff; padding:30px; border-radius:18px; margin-top:20px }
+.error { background:#fee2e2; color:#991b1b; padding:14px; border-radius:10px }
+.success { background:#dcfce7; color:#166534; padding:14px; border-radius:10px }
+</style>
+</head>
+
+<body>
+
+<h1>📦 Requisição de Mercadoria — Debug Total</h1>
+
+<div class="card">
+  <div class="grid">
+    <input id="produtoId" placeholder="Produto ID">
+    <input id="quantidade" placeholder="Quantidade">
+    <input id="dataTransferencia" placeholder="Data Transferência (YYYY-MM-DD)">
+    <input id="dataRecebimento" placeholder="Data Recebimento (YYYY-MM-DD)">
+    <input id="lojaId" value="1" placeholder="Loja ID">
+    <input id="localOrigemId" placeholder="Local Origem ID">
+    <input id="localDestinoId" placeholder="Local Destino ID">
+    <input id="setorId" placeholder="Setor ID">
+    <input id="solicitanteId" placeholder="Solicitante ID">
+    <input id="motivoRequisicaoId" placeholder="Motivo Requisição ID">
+    <input id="observacao" placeholder="Observação">
+  </div>
+
+  <br>
+  <button onclick="enviar()">Enviar Requisição</button>
+</div>
+
+<div id="msg"></div>
+
+<h2>🧪 Debug</h2>
+<pre id="debug"></pre>
+
+<script>
+async function enviar() {
+  const debug = document.getElementById("debug");
+  const msg = document.getElementById("msg");
+
+  debug.textContent = "";
+  msg.innerHTML = "";
+
+  try {
+    debug.textContent += "🔐 OBTENDO TOKEN...\n";
+
+    const authResp = await fetch("/api/auth");
+    const authText = await authResp.text();
+
+    debug.textContent += "AUTH RAW:\n" + authText + "\n\n";
+
+    const token = JSON.parse(authText).accessToken;
+    if (!token) throw new Error("Token não retornado");
+
+    debug.textContent += "TOKEN OK:\n" + token + "\n\n";
+
+    const body = {
+      dataTransferencia: document.getElementById("dataTransferencia").value,
+      dataRecebimento: document.getElementById("dataRecebimento").value,
+      tipo: "CONSUMO",
+      status: "RECEBIDA",
+      modelo: "DIRETA",
+      lojaId: Number(document.getElementById("lojaId").value),
+      localOrigemId: Number(document.getElementById("localOrigemId").value),
+      localDestinoId: Number(document.getElementById("localDestinoId").value),
+      setorId: Number(document.getElementById("setorId").value),
+      solicitanteId: Number(document.getElementById("solicitanteId").value),
+      motivoRequisicaoId: Number(document.getElementById("motivoRequisicaoId").value),
+      observacaoGeral: document.getElementById("observacao").value,
+      total: 1,
+      itens: [{
+        produtoId: Number(document.getElementById("produtoId").value),
+        quantidadeTransferida: Number(document.getElementById("quantidade").value),
+        observacao: "Enviado via API",
+        custoMedio: 0,
+        custo: 0,
+        custoReposicao: 0,
+        custoFiscal: 0
+      }]
+    };
+
+    debug.textContent += "BODY ENVIADO:\n" + JSON.stringify(body, null, 2) + "\n\n";
+
+    const resp = await fetch("/api/requisicao", {
+      method: "POST",
+      headers: { Authorization: token },
+      body: JSON.stringify(body)
+    });
+
+    const text = await resp.text();
+
+    debug.textContent += "STATUS: " + resp.status + "\n";
+    debug.textContent += "RAW:\n" + text;
+
+    if (!resp.ok) throw new Error("Erro ao enviar requisição");
+
+    msg.innerHTML = `<div class="success">✅ Requisição enviada com sucesso</div>`;
+
+  } catch (err) {
+    msg.innerHTML = `<div class="error">❌ ${err.message}</div>`;
+    debug.textContent += "\nERRO:\n" + err.message;
+  }
+}
+</script>
+
+</body>
+</html>
