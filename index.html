@@ -2,181 +2,88 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<title>Consulta de Produto - Debug Total</title>
-<meta name="viewport" content="width=device-width, initial-scale=1">
-
+<title>Consulta Produto - Debug Total</title>
 <style>
-body {
-  font-family: Inter, Arial, sans-serif;
-  background: #f5f6f8;
-  margin: 0;
-  padding: 30px;
-}
-h1 {
-  margin-bottom: 20px;
-}
-input {
-  width: 100%;
-  padding: 14px;
-  font-size: 16px;
-  margin-bottom: 10px;
-}
-button {
-  padding: 14px 24px;
-  font-size: 16px;
-  background: #ff6a00;
-  border: none;
-  color: #fff;
-  border-radius: 8px;
-  cursor: pointer;
-}
-button:hover {
-  opacity: 0.9;
-}
-.card {
-  background: #fff;
-  border-radius: 14px;
-  padding: 20px;
-  margin-top: 20px;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.08);
-}
-.debug {
-  background: #0f172a;
-  color: #e5e7eb;
-  padding: 16px;
-  border-radius: 10px;
-  margin-top: 20px;
-  font-family: monospace;
-  font-size: 13px;
-  white-space: pre-wrap;
-}
-.error {
-  background: #fee2e2;
-  color: #7f1d1d;
-  padding: 12px;
-  border-radius: 8px;
-  margin-top: 15px;
-}
-.ok {
-  background: #dcfce7;
-  color: #14532d;
-  padding: 12px;
-  border-radius: 8px;
-  margin-top: 15px;
-}
+body { font-family: Arial; background:#f4f6f8; padding:40px }
+input { padding:12px; width:300px }
+button { padding:12px 20px; background:#ff6a00; color:#fff; border:none; cursor:pointer }
+pre { background:#0f172a; color:#e5e7eb; padding:15px; border-radius:8px; overflow:auto }
+.card { background:#fff; padding:20px; border-radius:12px; margin-top:20px }
+.error { background:#fee2e2; color:#991b1b; padding:12px; border-radius:8px }
 </style>
 </head>
-
 <body>
 
 <h1>📦 Consulta de Produto (Debug Total)</h1>
 
-<input id="produtoId" placeholder="Digite o ID do produto (ex: 1178)">
+<input id="idProduto" placeholder="Digite o ID do produto">
 <button onclick="buscarProduto()">Buscar</button>
 
-<div id="status"></div>
+<div id="msg"></div>
+<pre id="debug"></pre>
 <div id="produto"></div>
-<div id="debug" class="debug"></div>
 
 <script>
-function log(msg) {
-  const dbg = document.getElementById('debug');
-  dbg.textContent += msg + "\n";
-  dbg.scrollTop = dbg.scrollHeight;
-}
-
 async function buscarProduto() {
-  document.getElementById('produto').innerHTML = '';
-  document.getElementById('status').innerHTML = '';
-  document.getElementById('debug').textContent = '';
+  const id = document.getElementById('idProduto').value.trim();
+  const debug = document.getElementById('debug');
+  const produtoDiv = document.getElementById('produto');
+  const msg = document.getElementById('msg');
 
-  const id = document.getElementById('produtoId').value.trim();
-  if (!id) return;
+  debug.textContent = "";
+  produtoDiv.innerHTML = "";
+  msg.innerHTML = "";
 
   try {
-    // ===============================
-    // 1️⃣ GERAR TOKEN
-    // ===============================
-    log("🔐 CHAMANDO /api/auth");
+    debug.textContent += "🔐 GERANDO TOKEN...\n";
 
-    const authUrl = `${location.origin}/api/auth`;
-    log("URL AUTH: " + authUrl);
+    const authResp = await fetch("/api/auth");
+    const authText = await authResp.text();
+    debug.textContent += "AUTH RAW:\n" + authText + "\n\n";
 
-    const authRes = await fetch(authUrl);
-    log("STATUS AUTH: " + authRes.status);
+    const auth = JSON.parse(authText);
+    const token = auth.accessToken;
 
-    const authText = await authRes.text();
-    log("RESPOSTA AUTH (RAW):\n" + authText);
+    if (!token) throw new Error("Token não retornado");
 
-    let authJson;
-    try {
-      authJson = JSON.parse(authText);
-    } catch {
-      throw new Error("Resposta do /api/auth NÃO é JSON");
-    }
+    debug.textContent += "TOKEN OK\n\n";
 
-    if (!authJson.accessToken) {
-      throw new Error("Token não retornado");
-    }
+    const urlProduto = `/api/produto?id=${id}`;
+    debug.textContent += "📦 CHAMANDO PRODUTO:\n" + urlProduto + "\n";
+    debug.textContent += "AUTH HEADER:\nBearer " + token + "\n\n";
 
-    const token = authJson.accessToken;
-    log("✅ TOKEN GERADO:\n" + token);
+    const prodResp = await fetch(urlProduto, {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    });
 
-    document.getElementById('status').innerHTML =
-      `<div class="ok">Token gerado com sucesso</div>`;
+    const prodText = await prodResp.text();
+    debug.textContent += "PRODUTO RAW:\n" + prodText + "\n";
 
-    // ===============================
-    // 2️⃣ BUSCAR PRODUTO
-    // ===============================
-    const produtoUrl =
-      `${location.origin}/api/produto?id=${id}`;
+    const json = JSON.parse(prodText);
 
-    log("\n📦 CHAMANDO PRODUTO");
-    log("URL PRODUTO: " + produtoUrl);
-
-    const prodRes = await fetch(produtoUrl);
-    log("STATUS PRODUTO: " + prodRes.status);
-
-    const prodText = await prodRes.text();
-    log("RESPOSTA PRODUTO (RAW):\n" + prodText);
-
-    let prodJson;
-    try {
-      prodJson = JSON.parse(prodText);
-    } catch {
-      throw new Error("Resposta do /api/produto NÃO é JSON");
-    }
-
-    if (!prodJson.items || !prodJson.items.length) {
-      document.getElementById('status').innerHTML =
-        `<div class="error">Produto não encontrado</div>`;
+    if (!json.items || !json.items.length) {
+      msg.innerHTML = `<div class="error">Produto não encontrado</div>`;
       return;
     }
 
-    const p = prodJson.items[0];
+    const p = json.items[0];
 
-    // ===============================
-    // 3️⃣ RENDERIZA CARD
-    // ===============================
-    document.getElementById('produto').innerHTML = `
+    produtoDiv.innerHTML = `
       <div class="card">
         <h2>${p.descricao}</h2>
         <p><b>ID:</b> ${p.id}</p>
-        <p><b>Descrição reduzida:</b> ${p.descricaoReduzida}</p>
         <p><b>Unidade:</b> ${p.unidadeDeVenda}</p>
-        <p><b>Grupo:</b> ${p.grupoId}</p>
-        <p><b>Seção:</b> ${p.secaoId}</p>
-        <p><b>Controla estoque:</b> ${p.controlaEstoque}</p>
-        <p><b>Ativo no ecommerce:</b> ${p.ativoNoEcommerce}</p>
-        <p><b>Data inclusão:</b> ${p.dataInclusao}</p>
+        <p><b>Estoque:</b> ${p.controlaEstoque ? "Sim" : "Não"}</p>
+        <p><b>Preço variável:</b> ${p.precoVariavel ? "Sim" : "Não"}</p>
+        <p><b>Última alteração:</b> ${p.dataAlteracao}</p>
       </div>
     `;
 
   } catch (err) {
-    document.getElementById('status').innerHTML =
-      `<div class="error">ERRO: ${err.message}</div>`;
-    log("\n❌ ERRO FINAL:");
-    log(err.stack || err.message);
+    msg.innerHTML = `<div class="error">ERRO: ${err.message}</div>`;
+    debug.textContent += "\nERRO:\n" + err.message;
   }
 }
 </script>
