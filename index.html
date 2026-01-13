@@ -1,43 +1,24 @@
-<script>
-async function enviar() {
-  const produtoId = document.getElementById("produto").value;
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Consulta de Produto</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<div class="container">
+<h1>🔎 Consulta de Produto</h1>
 
-  const payload = {
-    dataRegistro: "2026-01-12",
-    dataTransferencia: "2026-01-12",
-    tipo: "TRANSFERENCIA",
-    modelo: "DIRETA",
-    lojaId: 1,
-    localOrigemId: 1,
-    localDestinoId: 11,
-    solicitanteId: 130,
-    motivoRequisicaoId: 1,
-    observacaoGeral: "Transferência via API",
-    itens: [
-      {
-        produtoId: Number(produtoId),
-        quantidadeTransferida: 1,
-        custoMedio: 0,
-        custo: 0,
-        custoReposicao: 0,
-        custoFiscal: 0
-      }
-    ]
-  };
 
-  const res = await fetch("/api/requisicao", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload)
-  });
+<input id="produtoId" type="number" placeholder="Digite o ID do produto" />
+<button onclick="buscarProduto()">Buscar</button>
 
-  const text = await res.text();
 
-  if (!text.startsWith("{")) {
-    alert("Erro não JSON:\n" + text);
-    return;
-  }
+<div id="resultado"></div>
+</div>
 
-  alert(JSON.stringify(JSON.parse(text), null, 2));
-}
-</script>
+
+<script src="app.js"></script>
+</body>
+</html>
