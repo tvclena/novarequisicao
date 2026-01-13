@@ -1,34 +1,48 @@
 export default async function handler(req, res) {
   try {
-    const { id } = req.query;
-    if (!id) {
-      return res.status(400).json({ error: 'ID obrigatório' });
-    }
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<Usuario>
+  <username>${process.env.VAREJO_USER}</username>
+  <password>${process.env.VAREJO_PASS}</password>
+</Usuario>`;
 
-    // 1️⃣ busca token
-    const authRes = await fetch(`${req.headers.origin}/api/auth`);
-    const authData = await authRes.json();
-
-    if (!authData.accessToken) {
-      return res.status(500).json({ error: 'Token não gerado' });
-    }
-
-    // 2️⃣ busca produto pelo ID
-    const produtoRes = await fetch(
-      `https://mercatto.varejofacil.com/api/v1/produto/produtos?q=id==${id}`,
+    const response = await fetch(
+      "https://mercatto.varejofacil.com/api/auth",
       {
+        method: "POST",
         headers: {
-          Authorization: `${authData.accessToken}`,
-          Accept: 'application/json'
-        }
+          "Content-Type": "application/xml",
+          "Accept": "application/json"
+        },
+        body: xml
       }
     );
 
-    const produtoData = await produtoRes.json();
+    const text = await response.text();
 
-    res.status(200).json(produtoData);
+    // DEBUG TOTAL
+    console.log("AUTH STATUS:", response.status);
+    console.log("AUTH RAW:", text);
+
+    if (!response.ok) {
+      return res.status(response.status).json({
+        error: "Erro ao autenticar",
+        raw: text
+      });
+    }
+
+    const json = JSON.parse(text);
+
+    return res.status(200).json({
+      accessToken: json.accessToken,
+      refreshToken: json.refreshToken,
+      expiresIn: 1800 // 30 minutos
+    });
 
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    return res.status(500).json({
+      error: "Erro interno auth",
+      message: err.message
+    });
   }
 }
