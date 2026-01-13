@@ -18,7 +18,7 @@ export default async function handler(req, res) {
       `https://mercatto.varejofacil.com/api/v1/produto/produtos?q=id==${id}`,
       {
         headers: {
-          Authorization: `Bearer ${authData.accessToken}`,
+          Authorization: `${authData.accessToken}`,
           Accept: 'application/json'
         }
       }
