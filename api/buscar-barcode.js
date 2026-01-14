@@ -2,16 +2,26 @@ export default async function handler(req, res) {
   const { barcode } = req.query;
 
   if (!barcode) {
-    return res.status(400).json({
-      error: "Barcode não informado"
-    });
+    return res.status(400).json({ error: "Barcode não informado" });
   }
 
   try {
     /* =====================================================
-       1️⃣ OBTÉM TOKEN (USA SUA API AUTH EXISTENTE)
+       1️⃣ MONTA URL ABSOLUTA CORRETA
     ===================================================== */
-    const authResp = await fetch(`${process.env.VERCEL_URL || ""}/api/auth`);
+    const protocol = req.headers["x-forwarded-proto"] || "https";
+    const host = req.headers.host;
+    const baseUrl = `${protocol}://${host}`;
+
+    console.log("BASE URL:", baseUrl);
+
+    /* =====================================================
+       2️⃣ OBTÉM TOKEN (URL ABSOLUTA)
+    ===================================================== */
+    const authUrl = `${baseUrl}/api/auth`;
+    console.log("AUTH URL:", authUrl);
+
+    const authResp = await fetch(authUrl);
     const authRaw = await authResp.text();
 
     console.log("AUTH STATUS:", authResp.status);
@@ -28,18 +38,18 @@ export default async function handler(req, res) {
     const token = authJson.accessToken;
 
     if (!token) {
-      return res.status(401).json({
-        error: "Token não retornado"
-      });
+      return res.status(401).json({ error: "Token não retornado" });
     }
 
     /* =====================================================
-       2️⃣ BUSCA CÓDIGO AUXILIAR (EAN / BARCODE)
-       ⚠️ O ID DO CÓDIGO É O PRÓPRIO BARCODE
+       3️⃣ BUSCA CÓDIGO AUXILIAR (EAN)
+       ⚠️ ID DO EAN = BARCODE
     ===================================================== */
-    const urlCodigo = `https://mercatto.varejofacil.com/api/v1/produto/codigos-auxiliares?q=id==${barcode}&start=0&count=1`;
+    const urlCodigo =
+      `https://mercatto.varejofacil.com/api/v1/produto/codigos-auxiliares` +
+      `?q=id==${barcode}&start=0&count=1`;
 
-    console.log("BUSCANDO CÓDIGO AUXILIAR:", urlCodigo);
+    console.log("BUSCANDO EAN:", urlCodigo);
 
     const codigoResp = await fetch(urlCodigo, {
       headers: {
@@ -50,23 +60,19 @@ export default async function handler(req, res) {
 
     const codigoRaw = await codigoResp.text();
 
-    console.log("CODIGO STATUS:", codigoResp.status);
-    console.log("CODIGO RAW:", codigoRaw);
+    console.log("EAN STATUS:", codigoResp.status);
+    console.log("EAN RAW:", codigoRaw);
 
     if (!codigoResp.ok) {
       return res.status(codigoResp.status).json({
-        error: "Erro ao buscar código de barras",
+        error: "Erro ao buscar código auxiliar",
         raw: codigoRaw
       });
     }
 
     const codigoJson = JSON.parse(codigoRaw);
 
-    if (
-      !codigoJson.items ||
-      !codigoJson.items.length ||
-      !codigoJson.items[0].produtoId
-    ) {
+    if (!codigoJson.items || !codigoJson.items.length) {
       return res.status(404).json({
         error: "Código de barras não encontrado",
         barcode
@@ -74,13 +80,13 @@ export default async function handler(req, res) {
     }
 
     const produtoId = codigoJson.items[0].produtoId;
-
-    console.log("PRODUTO ID ENCONTRADO:", produtoId);
+    console.log("PRODUTO ID:", produtoId);
 
     /* =====================================================
-       3️⃣ BUSCA PRODUTO COMPLETO PELO ID
+       4️⃣ BUSCA PRODUTO COMPLETO
     ===================================================== */
-    const urlProduto = `https://mercatto.varejofacil.com/api/v1/produto/produtos/${produtoId}`;
+    const urlProduto =
+      `https://mercatto.varejofacil.com/api/v1/produto/produtos/${produtoId}`;
 
     console.log("BUSCANDO PRODUTO:", urlProduto);
 
@@ -106,7 +112,7 @@ export default async function handler(req, res) {
     const produtoJson = JSON.parse(produtoRaw);
 
     /* =====================================================
-       4️⃣ RETORNO FINAL (PRODUTO COMPLETO)
+       5️⃣ RETORNO FINAL
     ===================================================== */
     return res.status(200).json({
       barcode,
@@ -115,7 +121,7 @@ export default async function handler(req, res) {
     });
 
   } catch (err) {
-    console.error("ERRO BUSCAR BARCODE:", err);
+    console.error("ERRO GERAL:", err);
     return res.status(500).json({
       error: "Erro interno busca barcode",
       message: err.message
