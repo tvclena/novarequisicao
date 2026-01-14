@@ -2,208 +2,117 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<title>Requisição de Mercadoria - Debug Total</title>
-
+<title>Requisição de Mercadoria</title>
 <style>
-* { box-sizing: border-box }
-body {
-  font-family: Inter, Arial, sans-serif;
-  background: #f4f6f8;
-  padding: 40px;
-  color: #111;
-}
-h1 { margin-bottom: 10px }
-
-.grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit,minmax(220px,1fr));
-  gap: 12px;
-  margin-bottom: 20px;
-}
-
-input, select, textarea {
-  padding: 10px;
-  width: 100%;
-  border-radius: 6px;
-  border: 1px solid #d1d5db;
-  font-size: 14px;
-}
-
-textarea { resize: vertical }
-
-button {
-  padding: 14px 22px;
-  background: #ff6a00;
-  color: #fff;
-  border: none;
-  border-radius: 8px;
-  font-size: 15px;
-  cursor: pointer;
-}
-button:hover { opacity: .9 }
-
-pre {
-  background: #0f172a;
-  color: #e5e7eb;
-  padding: 15px;
-  border-radius: 10px;
-  overflow: auto;
-  font-size: 13px;
-  margin-top: 15px;
-}
-
-.card {
-  background: #fff;
-  padding: 20px;
-  border-radius: 14px;
-  margin-top: 25px;
-}
-
-.error {
-  background: #fee2e2;
-  color: #991b1b;
-  padding: 12px;
-  border-radius: 8px;
-  margin-top: 15px;
-}
-.success {
-  background: #dcfce7;
-  color: #166534;
-  padding: 12px;
-  border-radius: 8px;
-  margin-top: 15px;
-}
-label {
-  font-size: 12px;
-  font-weight: 600;
-  color: #374151;
-}
+body{font-family:Arial;background:#f4f6f8;padding:30px}
+input,button{padding:10px}
+button{background:#ff6a00;color:#fff;border:0;cursor:pointer}
+.list{background:#fff;margin-top:10px;border-radius:8px}
+.item{padding:10px;border-bottom:1px solid #eee;cursor:pointer}
+.item:hover{background:#f1f5f9}
+.card{background:#fff;padding:20px;border-radius:10px;margin-top:20px}
+pre{background:#020617;color:#e5e7eb;padding:15px;border-radius:8px}
+.error{background:#fee2e2;padding:10px;border-radius:8px}
 </style>
 </head>
-
 <body>
 
-<h1>📦 Requisição de Mercadoria (Debug Total)</h1>
+<h1>📦 Requisição de Mercadoria</h1>
 
-<div class="grid">
-  <div>
-    <label>ID Produto</label>
-    <input id="produtoId" type="number" value="18">
-  </div>
-  <div>
-    <label>Quantidade</label>
-    <input id="quantidade" type="number" value="1">
-  </div>
-  <div>
-    <label>Loja</label>
-    <input id="lojaId" type="number" value="1">
-  </div>
-  <div>
-    <label>Local Origem</label>
-    <input id="localOrigemId" type="number" value="1">
-  </div>
-  <div>
-    <label>Local Destino</label>
-    <input id="localDestinoId" type="number" value="1">
-  </div>
-  <div>
-    <label>Setor</label>
-    <input id="setorId" type="number" value="1">
-  </div>
-  <div>
-    <label>Solicitante</label>
-    <input id="solicitanteId" type="number" value="112">
-  </div>
-  <div>
-    <label>Motivo</label>
-    <input id="motivoId" type="number" value="1">
-  </div>
-</div>
+<input id="busca" placeholder="Buscar produto pelo nome">
+<div id="lista" class="list"></div>
 
-<label>Observação Geral</label>
-<textarea id="obsGeral">Requisição criada via API</textarea>
-
-<br><br>
-<button onclick="enviar()">Enviar Requisição</button>
-
-<div id="msg"></div>
+<div id="produto"></div>
 <pre id="debug"></pre>
 
 <script>
-async function enviar() {
-  const debug = document.getElementById("debug");
-  const msg = document.getElementById("msg");
-  debug.textContent = "";
-  msg.innerHTML = "";
+let produtoSelecionado = null;
+const debug = document.getElementById("debug");
 
-  try {
-    debug.textContent += "🔐 OBTENDO TOKEN...\n";
+async function buscar() {
+  const q = document.getElementById("busca").value;
+  if (q.length < 2) return;
 
-    const authResp = await fetch("/api/auth");
-    const authText = await authResp.text();
+  debug.textContent = "🔍 BUSCANDO...\n";
 
-    debug.textContent += "AUTH RAW:\n" + authText + "\n\n";
+  const r = await fetch(`/api/produtos-busca?q=${q}`);
+  const j = await r.json();
 
-    const auth = JSON.parse(authText);
-    const token = auth.accessToken;
+  debug.textContent += JSON.stringify(j, null, 2);
 
-    if (!token) throw new Error("Token não retornado");
+  const lista = document.getElementById("lista");
+  lista.innerHTML = "";
 
-    debug.textContent += "TOKEN OK:\n" + token + "\n\n";
-
-    const body = {
-      dataTransferencia: new Date().toISOString().slice(0,10),
-      dataRecebimento: new Date().toISOString().slice(0,10),
-      tipo: "REQUISICAO",
-      status: "EMITIDA",
-      modelo: "REQUISICAO",
-      lojaId: Number(lojaId.value),
-      localOrigemId: Number(localOrigemId.value),
-      localDestinoId: Number(localDestinoId.value),
-      setorId: Number(setorId.value),
-      solicitanteId: Number(solicitanteId.value),
-      motivoRequisicaoId: Number(motivoId.value),
-      observacaoGeral: obsGeral.value,
-      total: 0,
-      itens: [
-        {
-          id: 0,
-          produtoId: Number(produtoId.value),
-          quantidade: Number(quantidade.value),
-          observacao: "Item requisitado",
-          custoMedio: 0,
-          custo: 0,
-          custoReposicao: 0,
-          custoFiscal: 0
-        }
-      ]
-    };
-
-    debug.textContent += "BODY ENVIADO:\n" + JSON.stringify(body, null, 2) + "\n\n";
-
-    const resp = await fetch("/api/requisicao", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": token
-      },
-      body: JSON.stringify(body)
-    });
-
-    const text = await resp.text();
-
-    debug.textContent += "STATUS: " + resp.status + "\n";
-    debug.textContent += "RAW:\n" + text + "\n";
-
-    if (!resp.ok) throw new Error("Erro ao enviar requisição");
-
-    msg.innerHTML = `<div class="success">✅ Requisição enviada com sucesso</div>`;
-
-  } catch (err) {
-    msg.innerHTML = `<div class="error">❌ ${err.message}</div>`;
-    debug.textContent += "\nERRO:\n" + err.message;
-  }
+  j.items.forEach(p => {
+    const div = document.createElement("div");
+    div.className = "item";
+    div.textContent = `${p.id} - ${p.descricao}`;
+    div.onclick = () => carregarProduto(p.id);
+    lista.appendChild(div);
+  });
 }
+
+async function carregarProduto(id) {
+  debug.textContent = "📦 CARREGANDO PRODUTO...\n";
+
+  const r = await fetch(`/api/produto-detalhe?id=${id}`);
+  const p = await r.json();
+
+  produtoSelecionado = p;
+
+  document.getElementById("produto").innerHTML = `
+    <div class="card">
+      <h2>${p.descricao}</h2>
+      <p>ID: ${p.id}</p>
+      <p>Unidade: ${p.unidadeDeVenda}</p>
+      <p>Estoque: ${p.controlaEstoque}</p>
+      <button onclick="enviar()">Enviar Requisição</button>
+    </div>
+  `;
+
+  debug.textContent += JSON.stringify(p, null, 2);
+}
+
+async function enviar() {
+  const body = {
+    dataTransferencia: new Date().toISOString().slice(0,10),
+    dataRecebimento: new Date().toISOString().slice(0,10),
+    tipo: "TRANSFERENCIA",
+    status: "ABERTA",
+    modelo: "DIRETA",
+    lojaId: 1,
+    localOrigemId: 1,
+    localDestinoId: 1,
+    setorId: 1,
+    solicitanteId: 112,
+    motivoRequisicaoId: 1,
+    observacaoGeral: "Gerado via sistema",
+    total: 1,
+    itens: [{
+      produtoId: produtoSelecionado.id,
+      quantidadeTransferida: 1,
+      observacao: "",
+      custoMedio: 0,
+      custo: 0,
+      custoReposicao: 0,
+      custoFiscal: 0
+    }]
+  };
+
+  debug.textContent += "\n🚀 ENVIANDO REQUISIÇÃO...\n";
+  debug.textContent += JSON.stringify(body, null, 2);
+
+  const r = await fetch("/api/requisicao", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  });
+
+  const t = await r.text();
+  debug.textContent += "\nRESPOSTA:\n" + t;
+}
+
+document.getElementById("busca").addEventListener("keyup", buscar);
 </script>
 
 </body>
