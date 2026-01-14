@@ -17,7 +17,7 @@ body{
   font-family:Inter,Arial;
   background:#f4f6f8;
 }
-h1{font-size:22px;margin-bottom:10px}
+h1{font-size:22px}
 
 button{
   width:100%;
@@ -30,10 +30,7 @@ button{
   color:#fff;
   margin-top:10px;
 }
-
-button.secondary{
-  background:#0f172a;
-}
+button.secondary{background:#0f172a}
 
 input{
   width:100%;
@@ -64,18 +61,10 @@ pre{
   padding:14px;
   border-radius:14px;
   margin-top:14px;
-  max-height:280px;
+  max-height:300px;
   overflow:auto;
   font-size:13px;
 }
-
-.small{
-  font-size:13px;
-  color:#64748b;
-  margin-top:6px;
-}
-
-.hidden{display:none}
 </style>
 </head>
 
@@ -86,21 +75,11 @@ pre{
 <button id="btnCamera">📷 Abrir câmera</button>
 
 <input id="manual" placeholder="Digite o código de barras manualmente">
-
 <button class="secondary" id="btnManual">🔍 Buscar manualmente</button>
 
-<div class="small">
-  A leitura por câmera continuará até encontrar um produto válido.
-</div>
-
-<video id="video"
-  playsinline
-  autoplay
-  muted
-></video>
+<video id="video" autoplay playsinline muted></video>
 
 <div id="resultado"></div>
-
 <pre id="debug"></pre>
 
 <audio id="beep">
@@ -110,26 +89,27 @@ pre{
 <script src="https://unpkg.com/@ericblade/quagga2/dist/quagga.min.js"></script>
 
 <script>
+let token = null;
 let stream = null;
 let lendo = false;
 let buscando = false;
-let token = null;
+let ultimoCodigo = null;
 
+const debug = document.getElementById("debug");
 const video = document.getElementById("video");
 const resultado = document.getElementById("resultado");
-const debug = document.getElementById("debug");
 const beep = document.getElementById("beep");
 
-// ======================= DEBUG HELPER
-function log(msg){
-  debug.textContent += msg + "\n";
+function log(txt){
+  debug.textContent += txt + "\n";
   debug.scrollTop = debug.scrollHeight;
 }
 
-// ======================= AUTH
-async function obterToken(){
-  log("🔐 GERANDO TOKEN...");
+// ================= AUTH
+async function gerarToken(){
+  if(token) return token;
 
+  log("🔐 GERANDO TOKEN...");
   const resp = await fetch("/api/auth");
   const raw = await resp.text();
 
@@ -137,75 +117,60 @@ async function obterToken(){
   log("AUTH RAW:");
   log(raw);
 
-  if(!resp.ok){
-    throw new Error("Erro ao gerar token");
-  }
-
   const json = JSON.parse(raw);
   token = json.accessToken;
 
-  log("✅ TOKEN GERADO:");
+  log("✅ TOKEN:");
   log(token);
+
+  return token;
 }
 
-// ======================= BOTÃO CÂMERA (OBRIGATÓRIO NO IPHONE)
+// ================= CAMERA
 document.getElementById("btnCamera").onclick = async () => {
   if(stream) return;
 
-  try{
-    if(!token){
-      await obterToken();
-    }
+  await gerarToken();
 
-    stream = await navigator.mediaDevices.getUserMedia({
-      video:{ facingMode:"environment" }
-    });
+  stream = await navigator.mediaDevices.getUserMedia({
+    video:{facingMode:"environment"}
+  });
 
-    video.srcObject = stream;
-    await video.play();
+  video.srcObject = stream;
+  await video.play();
 
-    iniciarLeitura();
-  }catch(err){
-    log("❌ ERRO CÂMERA: " + err.message);
-    alert("Erro ao abrir câmera");
-  }
+  iniciarLeitura();
 };
 
-// ======================= BOTÃO MANUAL
+// ================= MANUAL
 document.getElementById("btnManual").onclick = async () => {
   const code = document.getElementById("manual").value.trim();
   if(!code) return;
 
-  if(!token){
-    await obterToken();
-  }
-
+  await gerarToken();
   buscarProduto(code);
 };
 
-// ======================= QUAGGA – LEITURA CONTÍNUA
+// ================= QUAGGA
 function iniciarLeitura(){
   if(lendo) return;
   lendo = true;
 
-  log("📷 INICIANDO LEITURA CONTÍNUA...");
+  log("📷 INICIANDO LEITURA CONTÍNUA");
 
   Quagga.init({
     inputStream:{
       type:"LiveStream",
-      target:video,
-      constraints:{}
+      target:video
     },
     decoder:{
       readers:[
         "ean_reader",
         "ean_8_reader",
         "code_128_reader",
-        "upc_reader",
-        "upc_e_reader"
+        "upc_reader"
       ]
-    },
-    locate:true
+    }
   }, err=>{
     if(err){
       log("❌ ERRO QUAGGA: " + err.message);
@@ -216,53 +181,47 @@ function iniciarLeitura(){
   });
 
   Quagga.onDetected(res=>{
-    if(!res.codeResult?.code) return;
+    const code = res.codeResult?.code;
+    if(!code) return;
+
     if(buscando) return;
+    if(code === ultimoCodigo) return;
 
-    const code = res.codeResult.code;
-    log("📡 CÓDIGO DETECTADO: " + code);
-
+    ultimoCodigo = code;
     buscarProduto(code);
   });
 }
 
-// ======================= BUSCAR PRODUTO
+// ================= BUSCA PRODUTO
 async function buscarProduto(barcode){
   buscando = true;
-
-  resultado.innerHTML = `
-    <div class="card">
-      🔍 Buscando produto para código <b>${barcode}</b>...
-    </div>
-  `;
-
-  log("➡️ BUSCANDO PRODUTO: " + barcode);
+  log("🔍 BUSCANDO: " + barcode);
 
   try{
-    const resp = await fetch(`/api/buscar-barcode?barcode=${barcode}`,{
-      headers:{
-        "Authorization": token
-      }
+    const url = `/api/buscar-barcode?barcode=${barcode}`;
+    log("URL: " + url);
+
+    const resp = await fetch(url,{
+      headers:{ Authorization: token }
     });
 
     const raw = await resp.text();
-
-    log("PRODUTO STATUS: " + resp.status);
-    log("PRODUTO RAW:");
+    log("STATUS: " + resp.status);
+    log("RAW:");
     log(raw);
 
     const json = JSON.parse(raw);
 
-    if(json.error){
+    if(!json.items || json.items.length === 0){
       buscando = false;
-      return; // continua lendo, sem erro visual
+      return; // CONTINUA LENDO
     }
 
-    // ACHOU PRODUTO
+    // ACHOU
     beep.play();
     pararCamera();
 
-    const p = json.produto;
+    const p = json.items[0];
 
     resultado.innerHTML = `
       <div class="card">
@@ -271,9 +230,6 @@ async function buscarProduto(barcode){
         <p><b>Unidade:</b> ${p.unidadeDeVenda}</p>
         <p><b>Controla estoque:</b> ${p.controlaEstoque ? "Sim" : "Não"}</p>
         <p><b>Última alteração:</b> ${p.dataAlteracao}</p>
-
-        <label>Quantidade</label>
-        <input type="number" min="1" value="1">
       </div>
     `;
 
@@ -283,7 +239,7 @@ async function buscarProduto(barcode){
   }
 }
 
-// ======================= PARAR CÂMERA
+// ================= PARAR
 function pararCamera(){
   lendo = false;
   buscando = false;
