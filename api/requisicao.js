@@ -3,46 +3,39 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Método não permitido" });
   }
 
-  const authHeader = req.headers.authorization;
-  const body = req.body;
-
-  if (!authHeader) {
-    return res.status(401).json({ error: "Token não enviado" });
-  }
-
   try {
-    const url = "https://mercatto.varejofacil.com/api/v1/estoque/requisicoes-mercadorias";
+    const authResp = await fetch(`${process.env.BASE_URL}/api/auth`);
+    const auth = await authResp.json();
 
-    console.log("URL REQUISICAO:", url);
-    console.log("AUTH:", authHeader);
-    console.log("BODY ENVIADO:", JSON.stringify(body, null, 2));
+    console.log("TOKEN:", auth.accessToken);
 
-    const response = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Authorization": authHeader,
-        "Content-Type": "application/json",
-        "Accept": "application/json"
-      },
-      body: JSON.stringify(body)
-    });
+    const body = req.body;
+    console.log("BODY RECEBIDO:", body);
 
-    const text = await response.text();
+    const resp = await fetch(
+      "https://mercatto.varejofacil.com/api/v1/estoque/requisicoes-mercadorias",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+          Authorization: auth.accessToken
+        },
+        body: JSON.stringify(body)
+      }
+    );
 
-    console.log("STATUS:", response.status);
-    console.log("RAW:", text);
+    const text = await resp.text();
+    console.log("REQUISIÇÃO RAW:", text);
 
-    if (!response.ok) {
-      return res.status(response.status).json({
+    if (!resp.ok) {
+      return res.status(resp.status).json({
         error: "Erro ao registrar requisição",
         raw: text
       });
     }
 
-    return res.status(200).json({
-      success: true,
-      raw: text
-    });
+    return res.status(201).json(JSON.parse(text));
 
   } catch (err) {
     return res.status(500).json({
