@@ -4,38 +4,43 @@ export default async function handler(req, res) {
   }
 
   try {
-    const authResp = await fetch(`${process.env.BASE_URL}/api/auth`);
-    const auth = await authResp.json();
+    /* =============== AUTH ================= */
+    const authResp = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/api/auth`);
+    const authJson = await authResp.json();
 
-    console.log("TOKEN:", auth.accessToken);
+    if (!authJson.accessToken) {
+      return res.status(401).json({ error: "Token não obtido", raw: authJson });
+    }
 
-    const body = req.body;
-    console.log("BODY RECEBIDO:", body);
+    const token = authJson.accessToken;
 
-    const resp = await fetch(
+    /* ============ ENVIO REQUISIÇÃO ============ */
+    const response = await fetch(
       "https://mercatto.varejofacil.com/api/v1/estoque/requisicoes-mercadorias",
       {
         method: "POST",
         headers: {
+          Authorization: token,
           "Content-Type": "application/json",
-          Accept: "application/json",
-          Authorization: auth.accessToken
+          Accept: "application/json"
         },
-        body: JSON.stringify(body)
+        body: JSON.stringify(req.body)
       }
     );
 
-    const text = await resp.text();
-    console.log("REQUISIÇÃO RAW:", text);
+    const raw = await response.text();
 
-    if (!resp.ok) {
-      return res.status(resp.status).json({
+    if (!response.ok) {
+      return res.status(response.status).json({
         error: "Erro ao registrar requisição",
-        raw: text
+        raw
       });
     }
 
-    return res.status(201).json(JSON.parse(text));
+    return res.status(201).json({
+      message: "Requisição criada com sucesso",
+      raw
+    });
 
   } catch (err) {
     return res.status(500).json({
