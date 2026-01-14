@@ -2,66 +2,16 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<title>Leitura de Código de Barras</title>
-
+<title>Leitura por Código de Barras</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
 
 <style>
-body{
-  font-family:Inter,Arial;
-  background:#f4f6f8;
-  padding:40px
-}
-input{
-  padding:14px;
-  width:360px;
-  font-size:18px;
-  margin-bottom:10px
-}
-button{
-  padding:14px 22px;
-  background:#ff6a00;
-  color:#fff;
-  border:none;
-  cursor:pointer;
-  border-radius:8px;
-  font-size:16px
-}
-button.secondary{
-  background:#0f172a
-}
-pre{
-  background:#020617;
-  color:#e5e7eb;
-  padding:16px;
-  border-radius:12px;
-  overflow:auto;
-  margin-top:20px;
-  max-height:300px
-}
-.card{
-  background:#fff;
-  padding:24px;
-  border-radius:18px;
-  margin-top:20px
-}
-.error{
-  background:#fee2e2;
-  color:#991b1b;
-  padding:14px;
-  border-radius:10px;
-  margin-top:20px
-}
-.grid{
-  display:grid;
-  grid-template-columns:1fr 1fr;
-  gap:12px;
-  margin-top:14px
-}
-label{
-  font-size:14px;
-  font-weight:600
-}
+body{font-family:Inter;background:#f4f6f8;padding:40px}
+input{padding:14px;width:360px;font-size:18px}
+button{padding:14px 22px;background:#ff6a00;color:#fff;border:none;border-radius:8px;cursor:pointer}
+pre{background:#020617;color:#e5e7eb;padding:16px;border-radius:12px;margin-top:20px;max-height:300px;overflow:auto}
+.card{background:#fff;padding:24px;border-radius:18px;margin-top:20px}
+.error{background:#fee2e2;color:#991b1b;padding:14px;border-radius:10px}
 </style>
 </head>
 
@@ -70,84 +20,46 @@ label{
 <h1>📦 Leitura por Código de Barras</h1>
 
 <input id="barcode" placeholder="Passe o leitor ou digite" autofocus>
-<br>
-<button onclick="buscar()">Buscar Produto</button>
+<button onclick="buscar()">Buscar</button>
 
 <pre id="debug"></pre>
-
 <div id="resultado"></div>
 
 <script>
-let produtoAtual = null;
+let produto = null;
 
 async function buscar(){
-  const barcode = document.getElementById("barcode").value.trim();
-  const debug = document.getElementById("debug");
-  const resultado = document.getElementById("resultado");
-
-  debug.textContent = "🔍 BUSCANDO PRODUTO...\n";
+  const barcode = barcodeInput.value.trim();
+  debug.textContent = "🔍 BUSCANDO...\n";
   resultado.innerHTML = "";
-  produtoAtual = null;
 
-  try {
-    const resp = await fetch(`/api/buscar-barcode?barcode=${barcode}`);
-    const raw = await resp.text();
+  const resp = await fetch(`/api/buscar-barcode?barcode=${barcode}`);
+  const raw = await resp.text();
+  debug.textContent += raw + "\n";
 
-    debug.textContent += "\nRAW RESPONSE:\n" + raw + "\n";
+  const json = JSON.parse(raw);
 
-    const json = JSON.parse(raw);
-
-    if(json.error){
-      resultado.innerHTML = `<div class="error">${json.error}</div>`;
-      return;
-    }
-
-    produtoAtual = json.produto;
-    const p = produtoAtual;
-
-    resultado.innerHTML = `
-      <div class="card">
-        <h2>${p.descricao}</h2>
-
-        <div class="grid">
-          <div><b>ID:</b> ${p.id}</div>
-          <div><b>Unidade:</b> ${p.unidadeDeVenda}</div>
-          <div><b>Controla estoque:</b> ${p.controlaEstoque ? "Sim" : "Não"}</div>
-          <div><b>Preço variável:</b> ${p.precoVariavel ? "Sim" : "Não"}</div>
-          <div><b>EAN/Barcode:</b> ${json.barcode}</div>
-          <div><b>Última alteração:</b> ${p.dataAlteracao}</div>
-        </div>
-
-        <hr style="margin:20px 0">
-
-        <h3>📑 Requisição de Mercadoria</h3>
-
-        <label>Quantidade</label><br>
-        <input id="quantidade" type="number" min="1" value="1">
-
-        <br><br>
-
-        <button class="secondary" onclick="enviarRequisicao()">
-          📤 Enviar Requisição
-        </button>
-      </div>
-    `;
-
-  } catch(err){
-    debug.textContent += "\nERRO:\n" + err.message;
-  }
-}
-
-async function enviarRequisicao(){
-  const debug = document.getElementById("debug");
-
-  if(!produtoAtual){
-    alert("Nenhum produto carregado");
+  if(json.error){
+    resultado.innerHTML = `<div class="error">${json.error}</div>`;
     return;
   }
 
-  const quantidade = Number(document.getElementById("quantidade").value);
+  produto = json.produto;
 
+  resultado.innerHTML = `
+    <div class="card">
+      <h2>${produto.descricao}</h2>
+      <p><b>ID:</b> ${produto.id}</p>
+      <p><b>Unidade:</b> ${produto.unidadeDeVenda}</p>
+
+      <input id="qtd" type="number" value="1" min="1">
+      <br><br>
+      <button onclick="enviar()">📤 Enviar Requisição</button>
+    </div>
+  `;
+}
+
+async function enviar(){
   const body = {
     dataTransferencia: new Date().toISOString().substring(0,10),
     dataRecebimento: new Date().toISOString().substring(0,10),
@@ -160,44 +72,29 @@ async function enviarRequisicao(){
     setorId: 1,
     solicitanteId: 112,
     motivoRequisicaoId: 1,
-    observacaoGeral: "Requisição via leitura de código de barras",
-    total: quantidade,
-    itens: [
-      {
-        produtoId: produtoAtual.id,
-        quantidadeTransferida: quantidade,
-        observacao: "",
-        custoMedio: 0,
-        custo: 0,
-        custoReposicao: 0,
-        custoFiscal: 0
-      }
-    ]
+    observacaoGeral: "Via scanner",
+    total: Number(qtd.value),
+    itens: [{
+      produtoId: produto.id,
+      quantidadeTransferida: Number(qtd.value),
+      observacao: "",
+      custoMedio: 0,
+      custo: 0,
+      custoReposicao: 0,
+      custoFiscal: 0
+    }]
   };
 
-  debug.textContent += "\n📤 ENVIANDO REQUISIÇÃO...\n";
-  debug.textContent += JSON.stringify(body, null, 2) + "\n";
+  debug.textContent += "\n📤 ENVIANDO...\n" + JSON.stringify(body, null, 2);
 
-  try{
-    const resp = await fetch("/api/requisicao", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body)
-    });
+  const resp = await fetch("/api/requisicao", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  });
 
-    const raw = await resp.text();
-    debug.textContent += "\nRESPONSE REQUISIÇÃO:\n" + raw + "\n";
-
-    if(!resp.ok){
-      alert("Erro ao enviar requisição");
-      return;
-    }
-
-    alert("✅ Requisição enviada com sucesso");
-
-  }catch(err){
-    debug.textContent += "\nERRO REQUISIÇÃO:\n" + err.message;
-  }
+  const raw = await resp.text();
+  debug.textContent += "\nRESPONSE:\n" + raw;
 }
 </script>
 
