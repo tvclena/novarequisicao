@@ -6,14 +6,17 @@ export default async function handler(req, res) {
   }
 
   try {
-    // 1️⃣ TOKEN
-    const auth = await fetch(`${process.env.BASE_URL}/api/auth`);
-    const authJson = await auth.json();
+    // 1️⃣ AUTENTICA (USANDO SEU AUTH)
+    const authResp = await fetch(`${req.headers.origin}/api/auth`);
+    const authJson = await authResp.json();
+
+    if (!authJson.accessToken) {
+      return res.status(401).json({ error: "Token não retornado", authJson });
+    }
+
     const token = authJson.accessToken;
 
-    if (!token) throw new Error("Token não gerado");
-
-    // 2️⃣ BUSCA CÓDIGOS AUXILIARES
+    // 2️⃣ BUSCA TODOS OS CÓDIGOS AUXILIARES
     const codigosResp = await fetch(
       "https://mercatto.varejofacil.com/api/v1/produto/codigos-auxiliares?start=0&count=1000",
       {
@@ -24,12 +27,16 @@ export default async function handler(req, res) {
       }
     );
 
-    const codigos = await codigosResp.json();
+    const codigosRaw = await codigosResp.text();
+    const codigos = JSON.parse(codigosRaw);
 
     const encontrado = codigos.items.find(i => i.id === barcode);
 
     if (!encontrado) {
-      return res.status(404).json({ error: "Código de barras não encontrado" });
+      return res.status(404).json({
+        error: "Código de barras não encontrado",
+        barcode
+      });
     }
 
     // 3️⃣ BUSCA PRODUTO COMPLETO
@@ -43,7 +50,8 @@ export default async function handler(req, res) {
       }
     );
 
-    const produto = await produtoResp.json();
+    const produtoRaw = await produtoResp.text();
+    const produto = JSON.parse(produtoRaw);
 
     return res.status(200).json({
       barcode,
