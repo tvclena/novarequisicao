@@ -6,61 +6,77 @@ export default async function handler(req, res) {
   }
 
   try {
-    /* ================= AUTH ================= */
-    const authResp = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/api/auth`);
+    // 🔐 AUTH
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<Usuario>
+  <username>NALBERT SOUZA</username>
+  <password>99861</password>
+</Usuario>`;
+
+    const authResp = await fetch(
+      "https://mercatto.varejofacil.com/api/auth",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/xml",
+          "Accept": "application/json"
+        },
+        body: xml
+      }
+    );
+
     const authJson = await authResp.json();
-
-    if (!authJson.accessToken) {
-      return res.status(401).json({ error: "Token não obtido", raw: authJson });
-    }
-
     const token = authJson.accessToken;
 
-    /* ========= BUSCA CÓDIGO AUXILIAR ========= */
-    const urlCodigo =
-      `https://mercatto.varejofacil.com/api/v1/produto/codigos-auxiliares` +
-      `?q=id==${barcode}&start=0&count=1`;
+    let start = 0;
+    const count = 200;
+    let encontrado = null;
 
-    const codResp = await fetch(urlCodigo, {
-      headers: {
-        Authorization: token,
-        Accept: "application/json"
-      }
-    });
+    while (!encontrado) {
+      const resp = await fetch(
+        `https://mercatto.varejofacil.com/api/v1/produto/codigos-auxiliares?start=${start}&count=${count}`,
+        {
+          headers: {
+            Authorization: token,
+            Accept: "application/json"
+          }
+        }
+      );
 
-    const codText = await codResp.text();
-    const codJson = JSON.parse(codText);
+      const data = await resp.json();
 
-    if (!codJson.items || !codJson.items.length) {
+      encontrado = data.items.find(i => i.id === barcode);
+
+      if (encontrado) break;
+
+      start += count;
+      if (start >= data.total) break;
+    }
+
+    if (!encontrado) {
       return res.status(404).json({
         error: "Código de barras não encontrado",
         barcode
       });
     }
 
-    const produtoId = codJson.items[0].produtoId;
-
-    /* ============ BUSCA PRODUTO ============== */
-    const urlProduto =
-      `https://mercatto.varejofacil.com/api/v1/produto/produtos?q=id==${produtoId}&start=0&count=1`;
-
-    const prodResp = await fetch(urlProduto, {
-      headers: {
-        Authorization: token,
-        Accept: "application/json"
+    // 🔍 PRODUTO COMPLETO
+    const prodResp = await fetch(
+      `https://mercatto.varejofacil.com/api/v1/produto/produtos/${encontrado.produtoId}`,
+      {
+        headers: {
+          Authorization: token,
+          Accept: "application/json"
+        }
       }
-    });
+    );
 
-    const prodText = await prodResp.text();
-    const prodJson = JSON.parse(prodText);
-
-    if (!prodJson.items || !prodJson.items.length) {
-      return res.status(404).json({ error: "Produto não encontrado" });
-    }
+    const produto = await prodResp.json();
 
     return res.status(200).json({
       barcode,
-      produto: prodJson.items[0]
+      produtoId: encontrado.produtoId,
+      produto
     });
 
   } catch (err) {
