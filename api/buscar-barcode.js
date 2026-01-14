@@ -1,154 +1,123 @@
-/**
- * buscar-barcode.js
- * Versão otimizada com cache de token + cache de códigos auxiliares
- * Resultado: leitura praticamente instantânea
- */
+export default async function handler(req, res) {
+  const { barcode } = req.query;
 
-let cachedToken = null;
-let tokenExpiraEm = 0;
-
-let cacheCodigos = null; // Map(barcode -> produtoId)
-let cacheAtualizadoEm = 0;
-
-// ==================== TOKEN ====================
-async function getToken() {
-  const agora = Date.now();
-
-  // Reutiliza token válido
-  if (cachedToken && agora < tokenExpiraEm) {
-    return cachedToken;
+  if (!barcode) {
+    return res.status(400).json({
+      error: "Barcode não informado"
+    });
   }
 
-  const xml = `<?xml version="1.0" encoding="UTF-8"?>
-<Usuario>
-  <username>NALBERT SOUZA</username>
-  <password>99861</password>
-</Usuario>`;
+  try {
+    /* =====================================================
+       1️⃣ OBTÉM TOKEN (USA SUA API AUTH EXISTENTE)
+    ===================================================== */
+    const authResp = await fetch(`${process.env.VERCEL_URL || ""}/api/auth`);
+    const authRaw = await authResp.text();
 
-  const resp = await fetch(
-    "https://mercatto.varejofacil.com/api/auth",
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/xml",
-        "Accept": "application/json"
-      },
-      body: xml
+    console.log("AUTH STATUS:", authResp.status);
+    console.log("AUTH RAW:", authRaw);
+
+    if (!authResp.ok) {
+      return res.status(401).json({
+        error: "Erro ao autenticar",
+        raw: authRaw
+      });
     }
-  );
 
-  const raw = await resp.text();
+    const authJson = JSON.parse(authRaw);
+    const token = authJson.accessToken;
 
-  if (!resp.ok) {
-    throw new Error("Erro ao autenticar: " + raw);
-  }
+    if (!token) {
+      return res.status(401).json({
+        error: "Token não retornado"
+      });
+    }
 
-  const json = JSON.parse(raw);
+    /* =====================================================
+       2️⃣ BUSCA CÓDIGO AUXILIAR (EAN / BARCODE)
+       ⚠️ O ID DO CÓDIGO É O PRÓPRIO BARCODE
+    ===================================================== */
+    const urlCodigo = `https://mercatto.varejofacil.com/api/v1/produto/codigos-auxiliares?q=id==${barcode}&start=0&count=1`;
 
-  cachedToken = json.accessToken;
-  // expira 1 minuto antes para segurança
-  tokenExpiraEm = agora + (json.expiresIn * 1000) - 60000;
+    console.log("BUSCANDO CÓDIGO AUXILIAR:", urlCodigo);
 
-  return cachedToken;
-}
-
-// ==================== CÓDIGOS AUXILIARES ====================
-async function carregarCodigos(token) {
-  // Cache válido por 10 minutos
-  if (cacheCodigos && Date.now() - cacheAtualizadoEm < 10 * 60 * 1000) {
-    return cacheCodigos;
-  }
-
-  const mapa = new Map();
-  let start = 0;
-  const count = 500;
-
-  while (true) {
-    const resp = await fetch(
-      `https://mercatto.varejofacil.com/api/v1/produto/codigos-auxiliares?start=${start}&count=${count}`,
-      {
-        headers: {
-          Authorization: token,
-          Accept: "application/json"
-        }
+    const codigoResp = await fetch(urlCodigo, {
+      headers: {
+        Authorization: token,
+        Accept: "application/json"
       }
-    );
-
-    const data = await resp.json();
-
-    if (!data.items || !data.items.length) break;
-
-    data.items.forEach(item => {
-      // item.id = código de barras
-      // item.produtoId = id do produto
-      mapa.set(item.id, item.produtoId);
     });
 
-    start += count;
-    if (start >= data.total) break;
-  }
+    const codigoRaw = await codigoResp.text();
 
-  cacheCodigos = mapa;
-  cacheAtualizadoEm = Date.now();
+    console.log("CODIGO STATUS:", codigoResp.status);
+    console.log("CODIGO RAW:", codigoRaw);
 
-  return mapa;
-}
-
-// ==================== HANDLER ====================
-export default async function handler(req, res) {
-  try {
-    const { barcode } = req.query;
-
-    if (!barcode) {
-      return res.status(400).json({ error: "Barcode obrigatório" });
+    if (!codigoResp.ok) {
+      return res.status(codigoResp.status).json({
+        error: "Erro ao buscar código de barras",
+        raw: codigoRaw
+      });
     }
 
-    // 1️⃣ Token (cacheado)
-    const token = await getToken();
+    const codigoJson = JSON.parse(codigoRaw);
 
-    // 2️⃣ Mapa de códigos (cacheado)
-    const codigos = await carregarCodigos(token);
-
-    const produtoId = codigos.get(barcode);
-
-    if (!produtoId) {
+    if (
+      !codigoJson.items ||
+      !codigoJson.items.length ||
+      !codigoJson.items[0].produtoId
+    ) {
       return res.status(404).json({
         error: "Código de barras não encontrado",
         barcode
       });
     }
 
-    // 3️⃣ Produto completo
-    const prodResp = await fetch(
-      `https://mercatto.varejofacil.com/api/v1/produto/produtos/${produtoId}`,
-      {
-        headers: {
-          Authorization: token,
-          Accept: "application/json"
-        }
+    const produtoId = codigoJson.items[0].produtoId;
+
+    console.log("PRODUTO ID ENCONTRADO:", produtoId);
+
+    /* =====================================================
+       3️⃣ BUSCA PRODUTO COMPLETO PELO ID
+    ===================================================== */
+    const urlProduto = `https://mercatto.varejofacil.com/api/v1/produto/produtos/${produtoId}`;
+
+    console.log("BUSCANDO PRODUTO:", urlProduto);
+
+    const produtoResp = await fetch(urlProduto, {
+      headers: {
+        Authorization: token,
+        Accept: "application/json"
       }
-    );
+    });
 
-    const produtoRaw = await prodResp.text();
+    const produtoRaw = await produtoResp.text();
 
-    if (!prodResp.ok) {
-      return res.status(prodResp.status).json({
+    console.log("PRODUTO STATUS:", produtoResp.status);
+    console.log("PRODUTO RAW:", produtoRaw);
+
+    if (!produtoResp.ok) {
+      return res.status(produtoResp.status).json({
         error: "Erro ao buscar produto",
         raw: produtoRaw
       });
     }
 
-    const produto = JSON.parse(produtoRaw);
+    const produtoJson = JSON.parse(produtoRaw);
 
+    /* =====================================================
+       4️⃣ RETORNO FINAL (PRODUTO COMPLETO)
+    ===================================================== */
     return res.status(200).json({
       barcode,
       produtoId,
-      produto
+      produto: produtoJson
     });
 
   } catch (err) {
+    console.error("ERRO BUSCAR BARCODE:", err);
     return res.status(500).json({
-      error: "Erro interno buscar-barcode",
+      error: "Erro interno busca barcode",
       message: err.message
     });
   }
