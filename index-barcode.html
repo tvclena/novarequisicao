@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Leitura Código de Barras</title>
+<style>
+body{font-family:Inter,Arial;background:#f4f6f8;padding:40px}
+input{padding:14px;width:350px;font-size:18px}
+button{padding:14px 22px;background:#ff6a00;color:#fff;border:none;cursor:pointer}
+pre{background:#020617;color:#e5e7eb;padding:16px;border-radius:10px;overflow:auto}
+.card{background:#fff;padding:24px;border-radius:16px;margin-top:20px}
+.error{background:#fee2e2;color:#991b1b;padding:14px;border-radius:10px}
+</style>
+</head>
+<body>
+
+<h1>📦 Leitura por Código de Barras</h1>
+
+<input id="barcode" placeholder="Passe o leitor ou digite">
+<button onclick="buscar()">Buscar</button>
+
+<pre id="debug"></pre>
+<div id="resultado"></div>
+
+<script>
+async function buscar(){
+  const barcode = document.getElementById('barcode').value.trim();
+  const debug = document.getElementById('debug');
+  const resultado = document.getElementById('resultado');
+
+  debug.textContent = "🔍 BUSCANDO...\n";
+  resultado.innerHTML = "";
+
+  try {
+    const resp = await fetch(`/api/buscar-barcode?barcode=${barcode}`);
+    const raw = await resp.text();
+
+    debug.textContent += "RAW:\n" + raw + "\n";
+
+    const json = JSON.parse(raw);
+
+    if(json.error){
+      resultado.innerHTML = `<div class="error">${json.error}</div>`;
+      return;
+    }
+
+    const p = json.produto;
+
+    resultado.innerHTML = `
+      <div class="card">
+        <h2>${p.descricao}</h2>
+        <p><b>ID:</b> ${p.id}</p>
+        <p><b>Unidade:</b> ${p.unidadeDeVenda}</p>
+        <p><b>Estoque:</b> ${p.controlaEstoque ? 'Sim' : 'Não'}</p>
+        <p><b>Preço variável:</b> ${p.precoVariavel ? 'Sim' : 'Não'}</p>
+        <p><b>Última alteração:</b> ${p.dataAlteracao}</p>
+      </div>
+    `;
+
+  } catch(err){
+    debug.textContent += "ERRO:\n" + err.message;
+  }
+}
+</script>
+
+</body>
+</html>
