@@ -4,7 +4,8 @@
 <meta charset="UTF-8">
 <title>Leitor de Código de Barras</title>
 
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="viewport"
+  content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
 
@@ -16,7 +17,8 @@ body{
   font-family:Inter,Arial;
   background:#f4f6f8;
 }
-h1{font-size:22px}
+h1{font-size:22px;margin-bottom:12px}
+
 button{
   width:100%;
   padding:18px;
@@ -27,34 +29,47 @@ button{
   background:#ff6a00;
   color:#fff;
 }
+
+input{
+  width:100%;
+  padding:16px;
+  font-size:18px;
+  border-radius:16px;
+  border:1px solid #cbd5e1;
+  margin-top:12px;
+}
+
 video{
   width:100%;
   border-radius:20px;
   margin-top:20px;
   background:#000;
 }
+
 .card{
   background:#fff;
   padding:20px;
   border-radius:20px;
   margin-top:20px;
 }
-input{
-  width:100%;
-  padding:14px;
-  font-size:18px;
-  border-radius:14px;
-  border:1px solid #cbd5e1;
-}
+
 .hidden{display:none}
+.small{font-size:14px;color:#64748b;margin-top:6px}
 </style>
 </head>
 
 <body>
 
-<h1>📦 Leitura por Câmera (iPhone OK)</h1>
+<h1>📦 Leitura de Código de Barras</h1>
 
 <button id="btnCamera">📷 Abrir câmera</button>
+
+<input id="manual"
+  placeholder="Ou digite o código de barras manualmente">
+
+<div class="small">
+  A leitura continuará até encontrar um produto válido.
+</div>
 
 <video id="video"
   playsinline
@@ -71,32 +86,42 @@ input{
 <script src="https://unpkg.com/@ericblade/quagga2/dist/quagga.min.js"></script>
 
 <script>
-let streamAtivo = null;
+let stream = null;
 let lendo = false;
+let buscando = false;
 
 const video = document.getElementById("video");
 const resultado = document.getElementById("resultado");
 const beep = document.getElementById("beep");
 
+// ====== BOTÃO CÂMERA (OBRIGATÓRIO NO IPHONE)
 document.getElementById("btnCamera").onclick = async () => {
-  if(streamAtivo) return;
+  if(stream) return;
 
   try{
-    // 🔴 PASSO CRÍTICO PARA IPHONE
-    streamAtivo = await navigator.mediaDevices.getUserMedia({
+    stream = await navigator.mediaDevices.getUserMedia({
       video:{ facingMode:"environment" }
     });
 
-    video.srcObject = streamAtivo;
+    video.srcObject = stream;
     await video.play();
 
-    iniciarQuagga();
+    iniciarLeitura();
   }catch(err){
     alert("Permissão de câmera negada");
   }
 };
 
-function iniciarQuagga(){
+// ====== INPUT MANUAL
+document.getElementById("manual").addEventListener("keydown", e=>{
+  if(e.key === "Enter"){
+    const code = e.target.value.trim();
+    if(code) buscarProduto(code);
+  }
+});
+
+// ====== INICIA QUAGGA (LEITURA CONTÍNUA)
+function iniciarLeitura(){
   if(lendo) return;
   lendo = true;
 
@@ -118,7 +143,7 @@ function iniciarQuagga(){
     locate:true
   }, err=>{
     if(err){
-      alert("Erro Quagga");
+      alert("Erro ao iniciar leitor");
       return;
     }
     Quagga.start();
@@ -126,48 +151,67 @@ function iniciarQuagga(){
 
   Quagga.onDetected(res=>{
     if(!res.codeResult?.code) return;
+    if(buscando) return;
 
     const code = res.codeResult.code;
-
-    beep.play();
-    Quagga.stop();
-    pararCamera();
     buscarProduto(code);
   });
 }
 
-function pararCamera(){
-  lendo = false;
-  if(streamAtivo){
-    streamAtivo.getTracks().forEach(t=>t.stop());
-    streamAtivo = null;
-  }
-}
-
+// ====== BUSCA PRODUTO (SÓ PARA QUANDO ACHAR)
 async function buscarProduto(barcode){
-  resultado.innerHTML = `<div class="card">🔍 Buscando ${barcode}...</div>`;
-
-  const resp = await fetch(`/api/buscar-barcode?barcode=${barcode}`);
-  const json = await resp.json();
-
-  if(json.error){
-    resultado.innerHTML = `<div class="card">${json.error}</div>`;
-    return;
-  }
-
-  const p = json.produto;
+  buscando = true;
 
   resultado.innerHTML = `
     <div class="card">
-      <h2>${p.descricao}</h2>
-      <p><b>ID:</b> ${p.id}</p>
-      <p><b>Unidade:</b> ${p.unidadeDeVenda}</p>
-      <p><b>Controla estoque:</b> ${p.controlaEstoque ? "Sim" : "Não"}</p>
-
-      <label>Quantidade</label>
-      <input type="number" value="1">
+      🔍 Buscando produto para código <b>${barcode}</b>...
     </div>
   `;
+
+  try{
+    const resp = await fetch(`/api/buscar-barcode?barcode=${barcode}`);
+    const json = await resp.json();
+
+    // ❌ NÃO ACHOU → CONTINUA LENDO
+    if(json.error){
+      buscando = false;
+      return;
+    }
+
+    // ✅ ACHOU → PARA TUDO
+    beep.play();
+    pararCamera();
+
+    const p = json.produto;
+
+    resultado.innerHTML = `
+      <div class="card">
+        <h2>${p.descricao}</h2>
+        <p><b>ID:</b> ${p.id}</p>
+        <p><b>Unidade:</b> ${p.unidadeDeVenda}</p>
+        <p><b>Controla estoque:</b> ${p.controlaEstoque ? "Sim" : "Não"}</p>
+
+        <label>Quantidade</label>
+        <input type="number" min="1" value="1">
+      </div>
+    `;
+
+  }catch(err){
+    buscando = false;
+  }
+}
+
+// ====== PARA CÂMERA
+function pararCamera(){
+  lendo = false;
+  buscando = false;
+
+  Quagga.stop();
+
+  if(stream){
+    stream.getTracks().forEach(t=>t.stop());
+    stream = null;
+  }
 }
 </script>
 
