@@ -2,9 +2,8 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<title>Leitura de Código de Barras</title>
+<title>Leitor de Código de Barras</title>
 
-<!-- MOBILE FIRST / SEM ZOOM -->
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
@@ -12,67 +11,60 @@
 <style>
 *{box-sizing:border-box}
 body{
-  font-family:Inter,Arial;
-  background:#f4f6f8;
   margin:0;
   padding:20px;
-  color:#111
+  font-family:Inter,Arial;
+  background:#f4f6f8;
+  color:#111;
 }
-h1{
-  font-size:22px;
-  margin-bottom:14px
-}
+h1{font-size:22px;margin-bottom:16px}
 button{
   width:100%;
   padding:16px;
+  border-radius:16px;
+  border:none;
   background:#ff6a00;
   color:#fff;
-  border:none;
-  border-radius:14px;
   font-size:18px;
   font-weight:700;
-  cursor:pointer
+  cursor:pointer;
 }
 button.secondary{
   background:#020617;
-  margin-top:10px
+  margin-top:10px;
 }
 video{
   width:100%;
-  border-radius:18px;
+  height:auto;
+  border-radius:20px;
   margin-top:16px;
-  display:none;
-  background:#000
+  background:#000;
 }
 .card{
   background:#fff;
   padding:20px;
   border-radius:20px;
-  margin-top:20px
+  margin-top:20px;
 }
 .grid{
   display:grid;
   grid-template-columns:1fr 1fr;
   gap:10px;
-  margin-top:12px
+  margin-top:12px;
 }
 input{
   width:100%;
   padding:14px;
   font-size:18px;
-  border-radius:12px;
-  border:1px solid #cbd5e1
-}
-label{
-  font-weight:600;
-  font-size:14px
+  border-radius:14px;
+  border:1px solid #cbd5e1;
 }
 .error{
   background:#fee2e2;
   color:#991b1b;
   padding:14px;
-  border-radius:12px;
-  margin-top:20px
+  border-radius:14px;
+  margin-top:20px;
 }
 .hidden{display:none}
 </style>
@@ -82,9 +74,9 @@ label{
 
 <h1>📦 Leitura por Código de Barras</h1>
 
-<button onclick="ativarCamera()">📷 Ativar câmera</button>
+<button onclick="iniciarCamera()">📷 Ativar câmera</button>
 
-<video id="video" autoplay playsinline></video>
+<video id="video" playsinline muted></video>
 
 <div id="resultado"></div>
 
@@ -92,21 +84,25 @@ label{
   <source src="data:audio/wav;base64,UklGRlIAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQwAAAAA" type="audio/wav">
 </audio>
 
-<!-- QUAGGA -->
 <script src="https://unpkg.com/@ericblade/quagga2/dist/quagga.min.js"></script>
 
 <script>
-let lendo = false;
+let cameraAtiva = false;
 let produtoAtual = null;
 
-function ativarCamera(){
-  const video = document.getElementById("video");
-  video.style.display = "block";
+async function iniciarCamera(){
+  if(cameraAtiva) return;
 
-  if(lendo) return;
+  const video = document.getElementById("video");
+
+  // GARANTE PERMISSÃO
+  await navigator.mediaDevices.getUserMedia({
+    video:{ facingMode:"environment" }
+  });
 
   Quagga.init({
     inputStream:{
+      name:"Live",
       type:"LiveStream",
       target:video,
       constraints:{
@@ -122,22 +118,21 @@ function ativarCamera(){
         "upc_e_reader"
       ]
     }
-  }, err => {
+  }, err=>{
     if(err){
-      alert("Erro ao acessar câmera");
+      alert("Erro ao iniciar câmera");
       return;
     }
     Quagga.start();
-    lendo = true;
+    cameraAtiva = true;
   });
 
-  Quagga.onDetected(dado=>{
-    const code = dado.codeResult.code;
+  Quagga.onDetected(result=>{
+    const code = result.codeResult.code;
     if(!code) return;
 
     Quagga.stop();
-    lendo = false;
-
+    cameraAtiva = false;
     document.getElementById("beep").play();
     buscarProduto(code);
   });
@@ -145,7 +140,7 @@ function ativarCamera(){
 
 async function buscarProduto(barcode){
   const resultado = document.getElementById("resultado");
-  resultado.innerHTML = "<div class='card'>🔍 Buscando produto...</div>";
+  resultado.innerHTML = `<div class="card">🔍 Buscando produto...</div>`;
 
   try{
     const resp = await fetch(`/api/buscar-barcode?barcode=${barcode}`);
@@ -179,13 +174,13 @@ async function buscarProduto(barcode){
       </div>
     `;
   }catch(err){
-    resultado.innerHTML = `<div class="error">Erro: ${err.message}</div>`;
+    resultado.innerHTML = `<div class="error">${err.message}</div>`;
   }
 }
 
 async function enviar(){
   if(!produtoAtual){
-    alert("Nenhum produto");
+    alert("Nenhum produto selecionado");
     return;
   }
 
@@ -203,16 +198,16 @@ async function enviar(){
     setorId: 1,
     solicitanteId: 112,
     motivoRequisicaoId: 1,
-    observacaoGeral: "Requisição via leitura de código de barras",
+    observacaoGeral: "Leitura por câmera",
     total: qtd,
-    itens: [{
+    itens:[{
       produtoId: produtoAtual.id,
       quantidadeTransferida: qtd,
-      observacao: "",
-      custoMedio: 0,
-      custo: 0,
-      custoReposicao: 0,
-      custoFiscal: 0
+      observacao:"",
+      custoMedio:0,
+      custo:0,
+      custoReposicao:0,
+      custoFiscal:0
     }]
   };
 
