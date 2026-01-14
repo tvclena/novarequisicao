@@ -6,7 +6,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    // 🔐 AUTH DIRETO (SEM HTTP INTERNO)
+    // 🔐 AUTH
     const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <Usuario>
   <username>NALBERT SOUZA</username>
@@ -25,32 +25,33 @@ export default async function handler(req, res) {
       }
     );
 
-    const authRaw = await authResp.text();
-
-    if (!authResp.ok) {
-      return res.status(authResp.status).json({
-        error: "Erro ao autenticar",
-        raw: authRaw
-      });
-    }
-
-    const authJson = JSON.parse(authRaw);
+    const authJson = await authResp.json();
     const token = authJson.accessToken;
 
-    // 📦 BUSCA CÓDIGOS AUXILIARES
-    const codigosResp = await fetch(
-      "https://mercatto.varejofacil.com/api/v1/produto/codigos-auxiliares?start=0&count=2000",
-      {
-        headers: {
-          Authorization: token,
-          Accept: "application/json"
+    let start = 0;
+    const count = 200;
+    let encontrado = null;
+
+    while (!encontrado) {
+      const resp = await fetch(
+        `https://mercatto.varejofacil.com/api/v1/produto/codigos-auxiliares?start=${start}&count=${count}`,
+        {
+          headers: {
+            Authorization: token,
+            Accept: "application/json"
+          }
         }
-      }
-    );
+      );
 
-    const codigos = await codigosResp.json();
+      const data = await resp.json();
 
-    const encontrado = codigos.items.find(i => i.id === barcode);
+      encontrado = data.items.find(i => i.id === barcode);
+
+      if (encontrado) break;
+
+      start += count;
+      if (start >= data.total) break;
+    }
 
     if (!encontrado) {
       return res.status(404).json({
@@ -59,8 +60,8 @@ export default async function handler(req, res) {
       });
     }
 
-    // 📦 PRODUTO COMPLETO
-    const produtoResp = await fetch(
+    // 🔍 PRODUTO COMPLETO
+    const prodResp = await fetch(
       `https://mercatto.varejofacil.com/api/v1/produto/produtos/${encontrado.produtoId}`,
       {
         headers: {
@@ -70,7 +71,7 @@ export default async function handler(req, res) {
       }
     );
 
-    const produto = await produtoResp.json();
+    const produto = await prodResp.json();
 
     return res.status(200).json({
       barcode,
