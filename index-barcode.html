@@ -15,29 +15,22 @@ body{
   padding:20px;
   font-family:Inter,Arial;
   background:#f4f6f8;
-  color:#111;
 }
-h1{font-size:22px;margin-bottom:16px}
+h1{font-size:22px}
 button{
   width:100%;
-  padding:16px;
-  border-radius:16px;
-  border:none;
-  background:#ff6a00;
-  color:#fff;
+  padding:18px;
   font-size:18px;
   font-weight:700;
-  cursor:pointer;
-}
-button.secondary{
-  background:#020617;
-  margin-top:10px;
+  border:none;
+  border-radius:18px;
+  background:#ff6a00;
+  color:#fff;
 }
 video{
   width:100%;
-  height:auto;
   border-radius:20px;
-  margin-top:16px;
+  margin-top:20px;
   background:#000;
 }
 .card{
@@ -46,12 +39,6 @@ video{
   border-radius:20px;
   margin-top:20px;
 }
-.grid{
-  display:grid;
-  grid-template-columns:1fr 1fr;
-  gap:10px;
-  margin-top:12px;
-}
 input{
   width:100%;
   padding:14px;
@@ -59,55 +46,65 @@ input{
   border-radius:14px;
   border:1px solid #cbd5e1;
 }
-.error{
-  background:#fee2e2;
-  color:#991b1b;
-  padding:14px;
-  border-radius:14px;
-  margin-top:20px;
-}
 .hidden{display:none}
 </style>
 </head>
 
 <body>
 
-<h1>📦 Leitura por Código de Barras</h1>
+<h1>📦 Leitura por Câmera (iPhone OK)</h1>
 
-<button onclick="iniciarCamera()">📷 Ativar câmera</button>
+<button id="btnCamera">📷 Abrir câmera</button>
 
-<video id="video" playsinline muted></video>
+<video id="video"
+  playsinline
+  autoplay
+  muted
+></video>
 
 <div id="resultado"></div>
 
 <audio id="beep">
-  <source src="data:audio/wav;base64,UklGRlIAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQwAAAAA" type="audio/wav">
+  <source src="data:audio/wav;base64,UklGRlIAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQwAAAAA">
 </audio>
 
 <script src="https://unpkg.com/@ericblade/quagga2/dist/quagga.min.js"></script>
 
 <script>
-let cameraAtiva = false;
-let produtoAtual = null;
+let streamAtivo = null;
+let lendo = false;
 
-async function iniciarCamera(){
-  if(cameraAtiva) return;
+const video = document.getElementById("video");
+const resultado = document.getElementById("resultado");
+const beep = document.getElementById("beep");
 
-  const video = document.getElementById("video");
+document.getElementById("btnCamera").onclick = async () => {
+  if(streamAtivo) return;
 
-  // GARANTE PERMISSÃO
-  await navigator.mediaDevices.getUserMedia({
-    video:{ facingMode:"environment" }
-  });
+  try{
+    // 🔴 PASSO CRÍTICO PARA IPHONE
+    streamAtivo = await navigator.mediaDevices.getUserMedia({
+      video:{ facingMode:"environment" }
+    });
+
+    video.srcObject = streamAtivo;
+    await video.play();
+
+    iniciarQuagga();
+  }catch(err){
+    alert("Permissão de câmera negada");
+  }
+};
+
+function iniciarQuagga(){
+  if(lendo) return;
+  lendo = true;
 
   Quagga.init({
     inputStream:{
-      name:"Live",
       type:"LiveStream",
       target:video,
-      constraints:{
-        facingMode:"environment"
-      }
+      constraints:{}
     },
     decoder:{
       readers:[
@@ -117,112 +114,60 @@ async function iniciarCamera(){
         "upc_reader",
         "upc_e_reader"
       ]
-    }
+    },
+    locate:true
   }, err=>{
     if(err){
-      alert("Erro ao iniciar câmera");
+      alert("Erro Quagga");
       return;
     }
     Quagga.start();
-    cameraAtiva = true;
   });
 
-  Quagga.onDetected(result=>{
-    const code = result.codeResult.code;
-    if(!code) return;
+  Quagga.onDetected(res=>{
+    if(!res.codeResult?.code) return;
 
+    const code = res.codeResult.code;
+
+    beep.play();
     Quagga.stop();
-    cameraAtiva = false;
-    document.getElementById("beep").play();
+    pararCamera();
     buscarProduto(code);
   });
 }
 
-async function buscarProduto(barcode){
-  const resultado = document.getElementById("resultado");
-  resultado.innerHTML = `<div class="card">🔍 Buscando produto...</div>`;
-
-  try{
-    const resp = await fetch(`/api/buscar-barcode?barcode=${barcode}`);
-    const json = await resp.json();
-
-    if(json.error){
-      resultado.innerHTML = `<div class="error">${json.error}</div>`;
-      return;
-    }
-
-    produtoAtual = json.produto;
-    const p = produtoAtual;
-
-    resultado.innerHTML = `
-      <div class="card">
-        <h2>${p.descricao}</h2>
-
-        <div class="grid">
-          <div><b>ID:</b> ${p.id}</div>
-          <div><b>Unidade:</b> ${p.unidadeDeVenda}</div>
-          <div><b>Estoque:</b> ${p.controlaEstoque ? "Sim" : "Não"}</div>
-          <div><b>Preço variável:</b> ${p.precoVariavel ? "Sim" : "Não"}</div>
-        </div>
-
-        <hr style="margin:18px 0">
-
-        <label>Quantidade</label>
-        <input id="quantidade" type="number" min="1" value="1">
-
-        <button class="secondary" onclick="enviar()">📤 Enviar requisição</button>
-      </div>
-    `;
-  }catch(err){
-    resultado.innerHTML = `<div class="error">${err.message}</div>`;
+function pararCamera(){
+  lendo = false;
+  if(streamAtivo){
+    streamAtivo.getTracks().forEach(t=>t.stop());
+    streamAtivo = null;
   }
 }
 
-async function enviar(){
-  if(!produtoAtual){
-    alert("Nenhum produto selecionado");
+async function buscarProduto(barcode){
+  resultado.innerHTML = `<div class="card">🔍 Buscando ${barcode}...</div>`;
+
+  const resp = await fetch(`/api/buscar-barcode?barcode=${barcode}`);
+  const json = await resp.json();
+
+  if(json.error){
+    resultado.innerHTML = `<div class="card">${json.error}</div>`;
     return;
   }
 
-  const qtd = Number(document.getElementById("quantidade").value);
+  const p = json.produto;
 
-  const body = {
-    dataTransferencia: new Date().toISOString().slice(0,10),
-    dataRecebimento: new Date().toISOString().slice(0,10),
-    tipo: "TRANSFERENCIA",
-    status: "ABERTA",
-    modelo: "DIRETA",
-    lojaId: 1,
-    localOrigemId: 1,
-    localDestinoId: 1,
-    setorId: 1,
-    solicitanteId: 112,
-    motivoRequisicaoId: 1,
-    observacaoGeral: "Leitura por câmera",
-    total: qtd,
-    itens:[{
-      produtoId: produtoAtual.id,
-      quantidadeTransferida: qtd,
-      observacao:"",
-      custoMedio:0,
-      custo:0,
-      custoReposicao:0,
-      custoFiscal:0
-    }]
-  };
+  resultado.innerHTML = `
+    <div class="card">
+      <h2>${p.descricao}</h2>
+      <p><b>ID:</b> ${p.id}</p>
+      <p><b>Unidade:</b> ${p.unidadeDeVenda}</p>
+      <p><b>Controla estoque:</b> ${p.controlaEstoque ? "Sim" : "Não"}</p>
 
-  const resp = await fetch("/api/requisicao",{
-    method:"POST",
-    headers:{ "Content-Type":"application/json" },
-    body:JSON.stringify(body)
-  });
-
-  if(resp.ok){
-    alert("✅ Requisição enviada");
-    document.getElementById("resultado").innerHTML="";
-  }else{
-    alert("❌ Erro ao enviar requisição");
-  }
+      <label>Quantidade</label>
+      <input type="number" value="1">
+    </div>
+  `;
 }
 </script>
 
