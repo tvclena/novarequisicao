@@ -4,64 +4,77 @@
 <meta charset="UTF-8">
 <title>Leitura de Código de Barras</title>
 
+<!-- MOBILE FIRST / SEM ZOOM -->
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
 
 <style>
+*{box-sizing:border-box}
 body{
   font-family:Inter,Arial;
   background:#f4f6f8;
-  padding:40px
+  margin:0;
+  padding:20px;
+  color:#111
 }
-input{
-  padding:14px;
-  width:360px;
-  font-size:18px;
-  margin-bottom:10px
+h1{
+  font-size:22px;
+  margin-bottom:14px
 }
 button{
-  padding:14px 22px;
+  width:100%;
+  padding:16px;
   background:#ff6a00;
   color:#fff;
   border:none;
-  cursor:pointer;
-  border-radius:8px;
-  font-size:16px
+  border-radius:14px;
+  font-size:18px;
+  font-weight:700;
+  cursor:pointer
 }
 button.secondary{
-  background:#0f172a
-}
-pre{
   background:#020617;
-  color:#e5e7eb;
-  padding:16px;
-  border-radius:12px;
-  overflow:auto;
-  margin-top:20px;
-  max-height:300px
+  margin-top:10px
+}
+video{
+  width:100%;
+  border-radius:18px;
+  margin-top:16px;
+  display:none;
+  background:#000
 }
 .card{
   background:#fff;
-  padding:24px;
-  border-radius:18px;
-  margin-top:20px
-}
-.error{
-  background:#fee2e2;
-  color:#991b1b;
-  padding:14px;
-  border-radius:10px;
+  padding:20px;
+  border-radius:20px;
   margin-top:20px
 }
 .grid{
   display:grid;
   grid-template-columns:1fr 1fr;
-  gap:12px;
-  margin-top:14px
+  gap:10px;
+  margin-top:12px
+}
+input{
+  width:100%;
+  padding:14px;
+  font-size:18px;
+  border-radius:12px;
+  border:1px solid #cbd5e1
 }
 label{
-  font-size:14px;
-  font-weight:600
+  font-weight:600;
+  font-size:14px
 }
+.error{
+  background:#fee2e2;
+  color:#991b1b;
+  padding:14px;
+  border-radius:12px;
+  margin-top:20px
+}
+.hidden{display:none}
 </style>
 </head>
 
@@ -69,33 +82,74 @@ label{
 
 <h1>📦 Leitura por Código de Barras</h1>
 
-<input id="barcode" placeholder="Passe o leitor ou digite" autofocus>
-<br>
-<button onclick="buscar()">Buscar Produto</button>
+<button onclick="ativarCamera()">📷 Ativar câmera</button>
 
-<pre id="debug"></pre>
+<video id="video" autoplay playsinline></video>
 
 <div id="resultado"></div>
 
+<audio id="beep">
+  <source src="data:audio/wav;base64,UklGRlIAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQwAAAAA" type="audio/wav">
+</audio>
+
+<!-- QUAGGA -->
+<script src="https://unpkg.com/@ericblade/quagga2/dist/quagga.min.js"></script>
+
 <script>
+let lendo = false;
 let produtoAtual = null;
 
-async function buscar(){
-  const barcode = document.getElementById("barcode").value.trim();
-  const debug = document.getElementById("debug");
+function ativarCamera(){
+  const video = document.getElementById("video");
+  video.style.display = "block";
+
+  if(lendo) return;
+
+  Quagga.init({
+    inputStream:{
+      type:"LiveStream",
+      target:video,
+      constraints:{
+        facingMode:"environment"
+      }
+    },
+    decoder:{
+      readers:[
+        "ean_reader",
+        "ean_8_reader",
+        "code_128_reader",
+        "upc_reader",
+        "upc_e_reader"
+      ]
+    }
+  }, err => {
+    if(err){
+      alert("Erro ao acessar câmera");
+      return;
+    }
+    Quagga.start();
+    lendo = true;
+  });
+
+  Quagga.onDetected(dado=>{
+    const code = dado.codeResult.code;
+    if(!code) return;
+
+    Quagga.stop();
+    lendo = false;
+
+    document.getElementById("beep").play();
+    buscarProduto(code);
+  });
+}
+
+async function buscarProduto(barcode){
   const resultado = document.getElementById("resultado");
+  resultado.innerHTML = "<div class='card'>🔍 Buscando produto...</div>";
 
-  debug.textContent = "🔍 BUSCANDO PRODUTO...\n";
-  resultado.innerHTML = "";
-  produtoAtual = null;
-
-  try {
+  try{
     const resp = await fetch(`/api/buscar-barcode?barcode=${barcode}`);
-    const raw = await resp.text();
-
-    debug.textContent += "\nRAW RESPONSE:\n" + raw + "\n";
-
-    const json = JSON.parse(raw);
+    const json = await resp.json();
 
     if(json.error){
       resultado.innerHTML = `<div class="error">${json.error}</div>`;
@@ -112,45 +166,34 @@ async function buscar(){
         <div class="grid">
           <div><b>ID:</b> ${p.id}</div>
           <div><b>Unidade:</b> ${p.unidadeDeVenda}</div>
-          <div><b>Controla estoque:</b> ${p.controlaEstoque ? "Sim" : "Não"}</div>
+          <div><b>Estoque:</b> ${p.controlaEstoque ? "Sim" : "Não"}</div>
           <div><b>Preço variável:</b> ${p.precoVariavel ? "Sim" : "Não"}</div>
-          <div><b>EAN/Barcode:</b> ${json.barcode}</div>
-          <div><b>Última alteração:</b> ${p.dataAlteracao}</div>
         </div>
 
-        <hr style="margin:20px 0">
+        <hr style="margin:18px 0">
 
-        <h3>📑 Requisição de Mercadoria</h3>
-
-        <label>Quantidade</label><br>
+        <label>Quantidade</label>
         <input id="quantidade" type="number" min="1" value="1">
 
-        <br><br>
-
-        <button class="secondary" onclick="enviarRequisicao()">
-          📤 Enviar Requisição
-        </button>
+        <button class="secondary" onclick="enviar()">📤 Enviar requisição</button>
       </div>
     `;
-
-  } catch(err){
-    debug.textContent += "\nERRO:\n" + err.message;
+  }catch(err){
+    resultado.innerHTML = `<div class="error">Erro: ${err.message}</div>`;
   }
 }
 
-async function enviarRequisicao(){
-  const debug = document.getElementById("debug");
-
+async function enviar(){
   if(!produtoAtual){
-    alert("Nenhum produto carregado");
+    alert("Nenhum produto");
     return;
   }
 
-  const quantidade = Number(document.getElementById("quantidade").value);
+  const qtd = Number(document.getElementById("quantidade").value);
 
   const body = {
-    dataTransferencia: new Date().toISOString().substring(0,10),
-    dataRecebimento: new Date().toISOString().substring(0,10),
+    dataTransferencia: new Date().toISOString().slice(0,10),
+    dataRecebimento: new Date().toISOString().slice(0,10),
     tipo: "TRANSFERENCIA",
     status: "ABERTA",
     modelo: "DIRETA",
@@ -161,42 +204,29 @@ async function enviarRequisicao(){
     solicitanteId: 112,
     motivoRequisicaoId: 1,
     observacaoGeral: "Requisição via leitura de código de barras",
-    total: quantidade,
-    itens: [
-      {
-        produtoId: produtoAtual.id,
-        quantidadeTransferida: quantidade,
-        observacao: "",
-        custoMedio: 0,
-        custo: 0,
-        custoReposicao: 0,
-        custoFiscal: 0
-      }
-    ]
+    total: qtd,
+    itens: [{
+      produtoId: produtoAtual.id,
+      quantidadeTransferida: qtd,
+      observacao: "",
+      custoMedio: 0,
+      custo: 0,
+      custoReposicao: 0,
+      custoFiscal: 0
+    }]
   };
 
-  debug.textContent += "\n📤 ENVIANDO REQUISIÇÃO...\n";
-  debug.textContent += JSON.stringify(body, null, 2) + "\n";
+  const resp = await fetch("/api/requisicao",{
+    method:"POST",
+    headers:{ "Content-Type":"application/json" },
+    body:JSON.stringify(body)
+  });
 
-  try{
-    const resp = await fetch("/api/requisicao", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body)
-    });
-
-    const raw = await resp.text();
-    debug.textContent += "\nRESPONSE REQUISIÇÃO:\n" + raw + "\n";
-
-    if(!resp.ok){
-      alert("Erro ao enviar requisição");
-      return;
-    }
-
-    alert("✅ Requisição enviada com sucesso");
-
-  }catch(err){
-    debug.textContent += "\nERRO REQUISIÇÃO:\n" + err.message;
+  if(resp.ok){
+    alert("✅ Requisição enviada");
+    document.getElementById("resultado").innerHTML="";
+  }else{
+    alert("❌ Erro ao enviar requisição");
   }
 }
 </script>
