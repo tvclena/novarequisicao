@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<title>Leitor de Código de Barras</title>
+<title>Leitor de Código de Barras – Debug Total</title>
 
 <meta name="viewport"
   content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
@@ -17,44 +17,65 @@ body{
   font-family:Inter,Arial;
   background:#f4f6f8;
 }
-h1{font-size:22px;margin-bottom:12px}
+h1{font-size:22px;margin-bottom:10px}
 
 button{
   width:100%;
-  padding:18px;
+  padding:16px;
   font-size:18px;
   font-weight:700;
   border:none;
-  border-radius:18px;
+  border-radius:16px;
   background:#ff6a00;
   color:#fff;
+  margin-top:10px;
+}
+
+button.secondary{
+  background:#0f172a;
 }
 
 input{
   width:100%;
   padding:16px;
   font-size:18px;
-  border-radius:16px;
+  border-radius:14px;
   border:1px solid #cbd5e1;
-  margin-top:12px;
+  margin-top:10px;
 }
 
 video{
   width:100%;
-  border-radius:20px;
-  margin-top:20px;
+  margin-top:14px;
+  border-radius:18px;
   background:#000;
 }
 
 .card{
   background:#fff;
-  padding:20px;
-  border-radius:20px;
-  margin-top:20px;
+  padding:18px;
+  border-radius:18px;
+  margin-top:14px;
+}
+
+pre{
+  background:#020617;
+  color:#e5e7eb;
+  padding:14px;
+  border-radius:14px;
+  margin-top:14px;
+  max-height:280px;
+  overflow:auto;
+  font-size:13px;
+}
+
+.small{
+  font-size:13px;
+  color:#64748b;
+  margin-top:6px;
 }
 
 .hidden{display:none}
-.small{font-size:14px;color:#64748b;margin-top:6px}
 </style>
 </head>
 
@@ -64,11 +85,12 @@ video{
 
 <button id="btnCamera">📷 Abrir câmera</button>
 
-<input id="manual"
-  placeholder="Ou digite o código de barras manualmente">
+<input id="manual" placeholder="Digite o código de barras manualmente">
+
+<button class="secondary" id="btnManual">🔍 Buscar manualmente</button>
 
 <div class="small">
-  A leitura continuará até encontrar um produto válido.
+  A leitura por câmera continuará até encontrar um produto válido.
 </div>
 
 <video id="video"
@@ -78,6 +100,8 @@ video{
 ></video>
 
 <div id="resultado"></div>
+
+<pre id="debug"></pre>
 
 <audio id="beep">
   <source src="data:audio/wav;base64,UklGRlIAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQwAAAAA">
@@ -89,16 +113,50 @@ video{
 let stream = null;
 let lendo = false;
 let buscando = false;
+let token = null;
 
 const video = document.getElementById("video");
 const resultado = document.getElementById("resultado");
+const debug = document.getElementById("debug");
 const beep = document.getElementById("beep");
 
-// ====== BOTÃO CÂMERA (OBRIGATÓRIO NO IPHONE)
+// ======================= DEBUG HELPER
+function log(msg){
+  debug.textContent += msg + "\n";
+  debug.scrollTop = debug.scrollHeight;
+}
+
+// ======================= AUTH
+async function obterToken(){
+  log("🔐 GERANDO TOKEN...");
+
+  const resp = await fetch("/api/auth");
+  const raw = await resp.text();
+
+  log("AUTH STATUS: " + resp.status);
+  log("AUTH RAW:");
+  log(raw);
+
+  if(!resp.ok){
+    throw new Error("Erro ao gerar token");
+  }
+
+  const json = JSON.parse(raw);
+  token = json.accessToken;
+
+  log("✅ TOKEN GERADO:");
+  log(token);
+}
+
+// ======================= BOTÃO CÂMERA (OBRIGATÓRIO NO IPHONE)
 document.getElementById("btnCamera").onclick = async () => {
   if(stream) return;
 
   try{
+    if(!token){
+      await obterToken();
+    }
+
     stream = await navigator.mediaDevices.getUserMedia({
       video:{ facingMode:"environment" }
     });
@@ -108,22 +166,29 @@ document.getElementById("btnCamera").onclick = async () => {
 
     iniciarLeitura();
   }catch(err){
-    alert("Permissão de câmera negada");
+    log("❌ ERRO CÂMERA: " + err.message);
+    alert("Erro ao abrir câmera");
   }
 };
 
-// ====== INPUT MANUAL
-document.getElementById("manual").addEventListener("keydown", e=>{
-  if(e.key === "Enter"){
-    const code = e.target.value.trim();
-    if(code) buscarProduto(code);
-  }
-});
+// ======================= BOTÃO MANUAL
+document.getElementById("btnManual").onclick = async () => {
+  const code = document.getElementById("manual").value.trim();
+  if(!code) return;
 
-// ====== INICIA QUAGGA (LEITURA CONTÍNUA)
+  if(!token){
+    await obterToken();
+  }
+
+  buscarProduto(code);
+};
+
+// ======================= QUAGGA – LEITURA CONTÍNUA
 function iniciarLeitura(){
   if(lendo) return;
   lendo = true;
+
+  log("📷 INICIANDO LEITURA CONTÍNUA...");
 
   Quagga.init({
     inputStream:{
@@ -143,10 +208,11 @@ function iniciarLeitura(){
     locate:true
   }, err=>{
     if(err){
-      alert("Erro ao iniciar leitor");
+      log("❌ ERRO QUAGGA: " + err.message);
       return;
     }
     Quagga.start();
+    log("✅ QUAGGA ATIVO");
   });
 
   Quagga.onDetected(res=>{
@@ -154,11 +220,13 @@ function iniciarLeitura(){
     if(buscando) return;
 
     const code = res.codeResult.code;
+    log("📡 CÓDIGO DETECTADO: " + code);
+
     buscarProduto(code);
   });
 }
 
-// ====== BUSCA PRODUTO (SÓ PARA QUANDO ACHAR)
+// ======================= BUSCAR PRODUTO
 async function buscarProduto(barcode){
   buscando = true;
 
@@ -168,17 +236,29 @@ async function buscarProduto(barcode){
     </div>
   `;
 
-  try{
-    const resp = await fetch(`/api/buscar-barcode?barcode=${barcode}`);
-    const json = await resp.json();
+  log("➡️ BUSCANDO PRODUTO: " + barcode);
 
-    // ❌ NÃO ACHOU → CONTINUA LENDO
+  try{
+    const resp = await fetch(`/api/buscar-barcode?barcode=${barcode}`,{
+      headers:{
+        "Authorization": token
+      }
+    });
+
+    const raw = await resp.text();
+
+    log("PRODUTO STATUS: " + resp.status);
+    log("PRODUTO RAW:");
+    log(raw);
+
+    const json = JSON.parse(raw);
+
     if(json.error){
       buscando = false;
-      return;
+      return; // continua lendo, sem erro visual
     }
 
-    // ✅ ACHOU → PARA TUDO
+    // ACHOU PRODUTO
     beep.play();
     pararCamera();
 
@@ -190,6 +270,7 @@ async function buscarProduto(barcode){
         <p><b>ID:</b> ${p.id}</p>
         <p><b>Unidade:</b> ${p.unidadeDeVenda}</p>
         <p><b>Controla estoque:</b> ${p.controlaEstoque ? "Sim" : "Não"}</p>
+        <p><b>Última alteração:</b> ${p.dataAlteracao}</p>
 
         <label>Quantidade</label>
         <input type="number" min="1" value="1">
@@ -197,11 +278,12 @@ async function buscarProduto(barcode){
     `;
 
   }catch(err){
+    log("❌ ERRO BUSCA: " + err.message);
     buscando = false;
   }
 }
 
-// ====== PARA CÂMERA
+// ======================= PARAR CÂMERA
 function pararCamera(){
   lendo = false;
   buscando = false;
@@ -212,6 +294,8 @@ function pararCamera(){
     stream.getTracks().forEach(t=>t.stop());
     stream = null;
   }
+
+  log("🛑 CÂMERA PARADA");
 }
 </script>
 
