@@ -2,14 +2,22 @@ export default async function handler(req, res) {
   const { q } = req.query;
 
   if (!q) {
-    return res.status(400).json({ error: "Texto de busca obrigatório" });
+    return res.status(400).json({ error: "Busca obrigatória" });
   }
 
   try {
-    // 1️⃣ pega token
-    const authResp = await fetch(`${process.env.BASE_URL}/api/auth`);
-    const auth = await authResp.json();
+    // 🔑 monta baseUrl corretamente
+    const baseUrl = req.headers.host.includes("localhost")
+      ? "http://localhost:3000"
+      : `https://${req.headers.host}`;
 
+    // 🔐 AUTH
+    const authResp = await fetch(`${baseUrl}/api/auth`);
+    const authText = await authResp.text();
+
+    console.log("AUTH RAW:", authText);
+
+    const auth = JSON.parse(authText);
     if (!auth.accessToken) {
       return res.status(401).json({ error: "Token não retornado" });
     }
@@ -25,14 +33,17 @@ export default async function handler(req, res) {
       }
     });
 
-    const text = await resp.text();
-    console.log("BUSCA RAW:", text);
+    const raw = await resp.text();
+    console.log("BUSCA RAW:", raw);
 
     if (!resp.ok) {
-      return res.status(resp.status).json({ error: "Erro busca", raw: text });
+      return res.status(resp.status).json({
+        error: "Erro interno busca",
+        raw
+      });
     }
 
-    return res.status(200).json(JSON.parse(text));
+    return res.status(200).json(JSON.parse(raw));
 
   } catch (err) {
     return res.status(500).json({
