@@ -7,7 +7,7 @@ export default async function handler(req, res) {
     const authResp = await fetch(`${process.env.BASE_URL}/api/auth`);
     const auth = await authResp.json();
 
-    const url = `https://villachopp.varejofacil.com/api/v1/produto/produtos/${id}`;
+    const url = `https://mercatto.varejofacil.com/api/v1/produto/produtos/${id}`;
 
     console.log("DETALHE URL:", url);
 
