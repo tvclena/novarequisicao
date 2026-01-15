@@ -105,6 +105,12 @@ function log(txt){
   debug.scrollTop = debug.scrollHeight;
 }
 
+/* ================= UTIL
+   SEMPRE acrescenta 0 à esquerda */
+function normalizarCodigo(code){
+  return "0" + String(code).trim();
+}
+
 // ================= AUTH
 async function gerarToken(){
   if(token) return token;
@@ -120,9 +126,7 @@ async function gerarToken(){
   const json = JSON.parse(raw);
   token = json.accessToken;
 
-  log("✅ TOKEN:");
-  log(token);
-
+  log("✅ TOKEN GERADO");
   return token;
 }
 
@@ -144,11 +148,13 @@ document.getElementById("btnCamera").onclick = async () => {
 
 // ================= MANUAL
 document.getElementById("btnManual").onclick = async () => {
-  const code = document.getElementById("manual").value.trim();
-  if(!code) return;
+  const rawCode = document.getElementById("manual").value.trim();
+  if(!rawCode) return;
 
   await gerarToken();
-  buscarProduto(code);
+
+  const codigoFinal = normalizarCodigo(rawCode);
+  buscarProduto(codigoFinal);
 };
 
 // ================= QUAGGA
@@ -181,21 +187,23 @@ function iniciarLeitura(){
   });
 
   Quagga.onDetected(res=>{
-    const code = res.codeResult?.code;
-    if(!code) return;
+    const rawCode = res.codeResult?.code;
+    if(!rawCode) return;
+
+    const codigoFinal = normalizarCodigo(rawCode);
 
     if(buscando) return;
-    if(code === ultimoCodigo) return;
+    if(codigoFinal === ultimoCodigo) return;
 
-    ultimoCodigo = code;
-    buscarProduto(code);
+    ultimoCodigo = codigoFinal;
+    buscarProduto(codigoFinal);
   });
 }
 
 // ================= BUSCA PRODUTO
 async function buscarProduto(barcode){
   buscando = true;
-  log("🔍 BUSCANDO: " + barcode);
+  log("🔍 BUSCANDO CÓDIGO: " + barcode);
 
   try{
     const url = `/api/buscar-barcode?barcode=${barcode}`;
@@ -230,6 +238,7 @@ async function buscarProduto(barcode){
         <p><b>Unidade:</b> ${p.unidadeDeVenda}</p>
         <p><b>Controla estoque:</b> ${p.controlaEstoque ? "Sim" : "Não"}</p>
         <p><b>Última alteração:</b> ${p.dataAlteracao}</p>
+        <p><b>Código enviado:</b> ${barcode}</p>
       </div>
     `;
 
