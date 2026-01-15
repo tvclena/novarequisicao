@@ -46,7 +46,7 @@ export default async function handler(req, res) {
        ⚠️ ID DO EAN = BARCODE
     ===================================================== */
     const urlCodigo =
-      `https://villachopp.varejofacil.com/api/v1/produto/codigos-auxiliares` +
+      `https://mercatto.varejofacil.com/api/v1/produto/codigos-auxiliares` +
       `?q=id==${barcode}&start=0&count=1`;
 
     console.log("BUSCANDO EAN:", urlCodigo);
@@ -86,7 +86,7 @@ export default async function handler(req, res) {
        4️⃣ BUSCA PRODUTO COMPLETO
     ===================================================== */
     const urlProduto =
-      `https://villachopp.varejofacil.com/api/v1/produto/produtos/${produtoId}`;
+      `https://mercatto.varejofacil.com/api/v1/produto/produtos/${produtoId}`;
 
     console.log("BUSCANDO PRODUTO:", urlProduto);
 
