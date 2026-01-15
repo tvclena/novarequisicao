@@ -11,7 +11,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const url = `https://villachopp.varejofacil.com/api/v1/produto/produtos?q=id==${id}&start=0&count=1`;
+    const url = `https://mercatto.varejofacil.com/api/v1/produto/produtos?q=id==${id}&start=0&count=1`;
 
     console.log("URL PRODUTO:", url);
     console.log("AUTH HEADER:", authHeader);
