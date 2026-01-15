@@ -13,7 +13,7 @@ export default async function handler(req, res) {
     console.log("BODY RECEBIDO:", body);
 
     const resp = await fetch(
-      "https://mercatto.varejofacil.com/api/v1/estoque/requisicoes-mercadorias",
+      "https://villachopp.varejofacil.com/api/v1/estoque/requisicoes-mercadorias",
       {
         method: "POST",
         headers: {
